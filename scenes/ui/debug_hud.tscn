@@ -1,0 +1,233 @@
+[gd_scene load_steps=2 format=3 uid="uid://debuhud001"]
+
+[ext_resource type="Script" path="res://scripts/ui/debug_hud.gd" id="1_debug_hud"]
+
+[node name="DebugHud" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_debug_hud")
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -280.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_horizontal = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="CurrentViewLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+text = "현재 층: 야외"
+
+[node name="ModeRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ModeLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ModeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "모드: 플레이"
+
+[node name="ModeButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ModeRow"]
+layout_mode = 2
+text = "모드 전환 (플레이/건설/가구)"
+
+[node name="DayRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DayPeriodLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/DayRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "낮 (식당)"
+
+[node name="DayPeriodButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/DayRow"]
+layout_mode = 2
+text = "낮/밤 전환 (N)"
+
+[node name="EconomyRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EconomyLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/EconomyRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "골드: 320 | 대출: 0 | 평점: 3.2"
+
+[node name="GameDayRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="GameDayLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/GameDayRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "여관 1일차 (브리핑)"
+
+[node name="EndDayButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/GameDayRow"]
+layout_mode = 2
+text = "하루 마치기"
+
+[node name="GuestRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="GuestCountLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/GuestRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "손님: 0명"
+
+[node name="SpawnGuestButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/GuestRow"]
+layout_mode = 2
+text = "손님 소환"
+
+[node name="QueueStatusLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+autowrap_mode = 3
+text = "카운터 줄 (0명)
+  (비어 있음)
+주방
+조리 대기 (0)
+  (비어 있음)
+조리 중 (0)
+  (비어 있음)
+서빙 큐 (0)
+  (비어 있음)"
+
+[node name="StaffRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StaffClockLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/StaffRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "시간: 08:00 (근무 중)"
+
+[node name="StaffTaskLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/StaffRow"]
+layout_mode = 2
+text = "여관주인: 휴식"
+
+[node name="CellInfoLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+text = "칸: (그리드에 마우스를 올리세요)"
+
+[node name="ResolutionRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ResolutionLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ResolutionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "해상도: 720p (1280x720)"
+
+[node name="ResolutionOption" type="OptionButton" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ResolutionRow"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+
+[node name="PaintRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PaintLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/PaintRow"]
+layout_mode = 2
+text = "칠할 타일:"
+
+[node name="PaintOption" type="OptionButton" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/PaintRow"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+
+[node name="ThemeRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ThemeLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ThemeRow"]
+layout_mode = 2
+text = "실내 테마:"
+
+[node name="ThemeOption" type="OptionButton" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/ThemeRow"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+
+[node name="FurnitureRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FurnitureLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/FurnitureRow"]
+layout_mode = 2
+text = "가구:"
+
+[node name="FurnitureOption" type="OptionButton" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/FurnitureRow"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+
+[node name="SaveLoadRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SaveButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/SaveLoadRow"]
+layout_mode = 2
+text = "저장"
+
+[node name="LoadButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/SaveLoadRow"]
+layout_mode = 2
+text = "불러오기"
+
+[node name="ClearButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/SaveLoadRow"]
+layout_mode = 2
+text = "초기화"
+
+[node name="UnitInfoLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+text = "유닛: 선택 없음"
+
+[node name="CustomerInfoLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+autowrap_mode = 3
+text = "손님: 선택 없음 (클릭하여 확인)"
+
+[node name="UnitRow" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SpawnBanditButton" type="Button" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer/UnitRow"]
+layout_mode = 2
+text = "산적 소환 (야외)"
+
+[node name="ViewButtons" type="HBoxContainer" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HelpLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+text = "플레이: 문/계단 | B=건설 | F=가구 | N=낮/밤"

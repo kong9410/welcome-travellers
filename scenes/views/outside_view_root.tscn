@@ -1,0 +1,51 @@
+[gd_scene format=3 uid="uid://b4k3t57831y05"]
+
+[ext_resource type="Script" path="res://scripts/views/outside_view_root.gd" id="1_outside_view_root"]
+[ext_resource type="Script" path="res://scripts/views/grid_visualizer.gd" id="2_grid_visualizer"]
+[ext_resource type="Script" path="res://scripts/views/grid_cell_renderer.gd" id="3_grid_cell_renderer"]
+[ext_resource type="Script" path="res://scripts/views/structure_ghost_renderer.gd" id="4_structure_ghost"]
+[ext_resource type="Script" path="res://scripts/views/furniture_ghost_renderer.gd" id="5_furniture_ghost"]
+[ext_resource type="PackedScene" uid="uid://outsidescroll01" path="res://scenes/views/outside_scroll_world.tscn" id="6_scroll_world"]
+
+[node name="OutsideViewRoot" type="Node2D"]
+script = ExtResource("1_outside_view_root")
+
+[node name="OutsideScrollWorld" parent="." instance=ExtResource("6_scroll_world")]
+
+[node name="GridVisualizer" type="Node2D" parent="."]
+visible = false
+script = ExtResource("2_grid_visualizer")
+
+[node name="GridCellRenderer" type="Node2D" parent="."]
+visible = false
+z_index = 1
+script = ExtResource("3_grid_cell_renderer")
+
+[node name="StructureGhostRenderer" type="Node2D" parent="."]
+visible = false
+z_index = 2
+script = ExtResource("4_structure_ghost")
+
+[node name="FurnitureLayer" type="Node2D" parent="."]
+visible = false
+z_index = 3
+y_sort_enabled = true
+
+[node name="FurnitureGhostRenderer" type="Node2D" parent="."]
+visible = false
+z_index = 4
+script = ExtResource("5_furniture_ghost")
+
+[node name="TileMap" type="TileMap" parent="."]
+visible = false
+format = 2
+
+[node name="TerrainTileMap" type="TileMapLayer" parent="TileMap"]
+
+[node name="EntityLayer" type="Node2D" parent="."]
+visible = false
+z_index = 3
+y_sort_enabled = true
+
+[node name="NavigationRegion2D" type="NavigationRegion2D" parent="."]
+visible = false

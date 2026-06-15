@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cme36jm2y0o3"]
+
+[ext_resource type="Script" path="res://scripts/entities/outside_customer_entity.gd" id="1_outside_customer"]
+
+[node name="OutsideCustomerEntity" type="Node2D"]
+script = ExtResource("1_outside_customer")

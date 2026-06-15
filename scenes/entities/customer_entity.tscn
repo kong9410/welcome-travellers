@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3 uid="uid://customerent1"]
+
+[ext_resource type="Script" path="res://scripts/entities/customer_entity.gd" id="1_customer"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_customer"]
+radius = 7.0
+
+[node name="CustomerEntity" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1_customer")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_customer")

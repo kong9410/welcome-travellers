@@ -1,0 +1,40 @@
+[gd_scene load_steps=6 format=3 uid="uid://viewroot001"]
+
+[ext_resource type="Script" path="res://scripts/views/view_root.gd" id="1_view_root"]
+[ext_resource type="Script" path="res://scripts/views/grid_visualizer.gd" id="2_grid_visualizer"]
+[ext_resource type="Script" path="res://scripts/views/grid_cell_renderer.gd" id="3_grid_cell_renderer"]
+[ext_resource type="Script" path="res://scripts/views/structure_ghost_renderer.gd" id="4_structure_ghost"]
+[ext_resource type="Script" path="res://scripts/views/furniture_ghost_renderer.gd" id="5_furniture_ghost"]
+
+[node name="ViewRoot" type="Node2D"]
+script = ExtResource("1_view_root")
+
+[node name="GridVisualizer" type="Node2D" parent="."]
+script = ExtResource("2_grid_visualizer")
+
+[node name="GridCellRenderer" type="Node2D" parent="."]
+z_index = 1
+script = ExtResource("3_grid_cell_renderer")
+
+[node name="StructureGhostRenderer" type="Node2D" parent="."]
+z_index = 2
+script = ExtResource("4_structure_ghost")
+
+[node name="FurnitureLayer" type="Node2D" parent="."]
+z_index = 3
+y_sort_enabled = true
+
+[node name="FurnitureGhostRenderer" type="Node2D" parent="."]
+z_index = 4
+script = ExtResource("5_furniture_ghost")
+
+[node name="TileMap" type="TileMap" parent="."]
+format = 2
+
+[node name="TerrainTileMap" type="TileMapLayer" parent="TileMap"]
+
+[node name="EntityLayer" type="Node2D" parent="."]
+z_index = 3
+y_sort_enabled = true
+
+[node name="NavigationRegion2D" type="NavigationRegion2D" parent="."]

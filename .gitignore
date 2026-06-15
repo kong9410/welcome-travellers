@@ -1,0 +1,22 @@
+# Godot 에디터가 자동으로 생성하는 수입(Import) 및 캐시 폴더
+.godot/
+
+# Godot 3.x 버전을 사용 중인 경우 아래 폴더를 제외해야 합니다.
+.import/
+export_preset.cfg
+
+# 에디터가 개별적으로 저장하는 로컬 텍스트 레이아웃 및 환경 설정
+# (팀원 간에 화면 배치가 달라질 수 있으므로 제외)
+.godot/extension_list.cfg
+
+# 프로젝트를 실행 파일로 빌드(Export)할 때 결과물을 저장할 폴더 예시
+# (직접 만든 빌드 폴더 이름이 있다면 추가해 주세요)
+export/
+build/
+
+# 모노(Mono) / C# 버전을 사용하는 경우 생성되는 빌드 파일 및 캐시
+.mono/
+data_*/
+mono_crash_*.log
+*.csproj
+*.sln

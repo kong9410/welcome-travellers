@@ -1,0 +1,233 @@
+[gd_scene load_steps=10 format=3 uid="uid://playerhud001"]
+
+[ext_resource type="Script" path="res://scripts/ui/player_hud.gd" id="1_player_hud"]
+[ext_resource type="PackedScene" uid="uid://buildtoolbar1" path="res://scenes/ui/build_toolbar.tscn" id="2_build_toolbar"]
+[ext_resource type="Script" path="res://scripts/ui/settings_button.gd" id="3_settings_button"]
+[ext_resource type="Script" path="res://scripts/ui/settings_gear_icon.gd" id="4_settings_gear_icon"]
+[ext_resource type="PackedScene" uid="uid://settingsmenu1" path="res://scenes/ui/settings_menu.tscn" id="5_settings_menu"]
+[ext_resource type="Script" path="res://scripts/ui/hud_coin_stack_icon.gd" id="6_coin_icon"]
+[ext_resource type="Script" path="res://scripts/ui/hud_star_rating.gd" id="7_star_rating"]
+[ext_resource type="Script" path="res://scripts/ui/hud_guest_icon.gd" id="8_guest_icon"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_top_bar"]
+bg_color = Color(0.06, 0.05, 0.07, 0.92)
+border_width_bottom = 1
+border_color = Color(0.42, 0.32, 0.20, 0.88)
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_time"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.06, 0.05, 0.07, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.42, 0.32, 0.20, 0.88)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 10.0
+content_margin_top = 7.0
+content_margin_right = 10.0
+content_margin_bottom = 7.0
+
+[node name="PlayerHud" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_player_hud")
+
+[node name="SettingsButton" type="Button" parent="."]
+z_index = 2
+layout_mode = 0
+offset_right = 52.0
+offset_bottom = 52.0
+focus_mode = 0
+script = ExtResource("3_settings_button")
+
+[node name="GearIcon" type="Control" parent="SettingsButton"]
+layout_mode = 0
+offset_left = 14.0
+offset_top = 14.0
+offset_right = 36.0
+offset_bottom = 36.0
+mouse_filter = 2
+script = ExtResource("4_settings_gear_icon")
+
+[node name="TopBar" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_top_bar")
+
+[node name="MarginContainer" type="MarginContainer" parent="TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 52
+
+[node name="HBox" type="HBoxContainer" parent="TopBar/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="GoldRow" type="HBoxContainer" parent="TopBar/MarginContainer/HBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 6
+
+[node name="CoinIcon" type="Control" parent="TopBar/MarginContainer/HBox/GoldRow"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+script = ExtResource("6_coin_icon")
+
+[node name="GoldLabel" type="Label" parent="TopBar/MarginContainer/HBox/GoldRow"]
+layout_mode = 2
+size_flags_vertical = 4
+text = "0"
+
+[node name="RatingRow" type="HBoxContainer" parent="TopBar/MarginContainer/HBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 6
+
+[node name="StarRating" type="Control" parent="TopBar/MarginContainer/HBox/RatingRow"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+script = ExtResource("7_star_rating")
+
+[node name="RatingLabel" type="Label" parent="TopBar/MarginContainer/HBox/RatingRow"]
+layout_mode = 2
+size_flags_vertical = 4
+text = "0.00/10"
+
+[node name="TimePanel" type="PanelContainer" parent="."]
+z_index = 1
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -180.0
+offset_top = 0.0
+offset_right = 180.0
+offset_bottom = 40.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_time")
+
+[node name="AlignCenter" type="CenterContainer" parent="TimePanel"]
+layout_mode = 2
+
+[node name="CenterRow" type="HBoxContainer" parent="TimePanel/AlignCenter"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="DayLabel" type="Label" parent="TimePanel/AlignCenter/CenterRow"]
+layout_mode = 2
+text = "1일차 · 영업 중"
+
+[node name="TimeLabel" type="Label" parent="TimePanel/AlignCenter/CenterRow"]
+layout_mode = 2
+text = "08:00"
+horizontal_alignment = 1
+
+[node name="GuestRow" type="HBoxContainer" parent="TimePanel/AlignCenter/CenterRow"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 6
+
+[node name="GuestIcon" type="Control" parent="TimePanel/AlignCenter/CenterRow/GuestRow"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+script = ExtResource("8_guest_icon")
+
+[node name="GuestsLabel" type="Label" parent="TimePanel/AlignCenter/CenterRow/GuestRow"]
+layout_mode = 2
+size_flags_vertical = 4
+text = "0"
+
+[node name="ViewSidebar" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 12.0
+offset_top = -72.0
+offset_right = 60.0
+offset_bottom = 72.0
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="MarginContainer" type="MarginContainer" parent="ViewSidebar"]
+layout_mode = 2
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="ViewTabs" type="VBoxContainer" parent="ViewSidebar/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BuildToolbar" parent="." instance=ExtResource("2_build_toolbar")]
+
+[node name="CustomerPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 72.0
+offset_top = -280.0
+offset_right = 360.0
+offset_bottom = -84.0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="MarginContainer" type="MarginContainer" parent="CustomerPanel"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="CustomerPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="CustomerTitleLabel" type="Label" parent="CustomerPanel/MarginContainer/VBox"]
+layout_mode = 2
+text = "손님"
+
+[node name="CustomerDetailLabel" type="Label" parent="CustomerPanel/MarginContainer/VBox"]
+layout_mode = 2
+autowrap_mode = 3
+text = "상태"
+
+[node name="NoticeLabel" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -220.0
+offset_top = -88.0
+offset_right = 220.0
+offset_bottom = -80.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "알림"
+
+[node name="SettingsMenu" parent="." instance=ExtResource("5_settings_menu")]
+layout_mode = 1

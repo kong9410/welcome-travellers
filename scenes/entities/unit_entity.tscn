@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://unitentity1"]
+
+[ext_resource type="Script" uid="uid://cpvemfkpwlxvt" path="res://scripts/entities/unit_entity.gd" id="1_unit"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_unit"]
+radius = 8.0
+
+[node name="UnitEntity" type="CharacterBody2D" unique_id=1854106462]
+motion_mode = 1
+script = ExtResource("1_unit")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=37788935]
+shape = SubResource("CircleShape2D_unit")
+
+[node name="NavigationAgent2D" type="NavigationAgent2D" parent="." unique_id=571391316]

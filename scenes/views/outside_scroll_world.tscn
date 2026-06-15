@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://bqkwp8egrcl0s"]
+
+[ext_resource type="Script" path="res://scripts/views/outside/outside_scroll_world.gd" id="1_scroll_world"]
+[ext_resource type="Script" path="res://scripts/views/outside/outside_sky_renderer.gd" id="2_sky"]
+[ext_resource type="Script" path="res://scripts/views/outside/outside_ground_renderer.gd" id="4_ground"]
+[ext_resource type="Script" path="res://scripts/views/outside/outside_inn_building_renderer.gd" id="5_inn"]
+
+[node name="OutsideScrollWorld" type="Node2D"]
+script = ExtResource("1_scroll_world")
+
+[node name="OutsideSkyRenderer" type="Node2D" parent="."]
+script = ExtResource("2_sky")
+
+[node name="GroundRenderer" type="Node2D" parent="."]
+script = ExtResource("4_ground")
+
+[node name="InnBuilding" type="Node2D" parent="."]
+script = ExtResource("5_inn")
+
+[node name="OutsideCustomerLayer" type="Node2D" parent="."]
+z_index = 6
+y_sort_enabled = true
