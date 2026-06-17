@@ -20,9 +20,11 @@ const OPTION_BUTTON_SIZE: float = 48.0
 var _menu_open: bool = false
 var _active_submenu: SubMenuKind = SubMenuKind.NONE
 var _selected_option_button: Button = null
+var _paused_for_build_menu: bool = false
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$Anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tooltip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -37,7 +39,7 @@ func _ready() -> void:
 	_reset_closed_ui()
 	EventBus.game_mode_changed.connect(_on_game_mode_changed)
 	EventBus.day_ended.connect(_on_day_phase_changed)
-	EventBus.morning_briefing_requested.connect(_on_day_phase_changed)
+	EventBus.service_phase_changed.connect(_on_day_phase_changed)
 	EventBus.day_started.connect(_update_main_button_enabled)
 	_update_main_button_enabled()
 
@@ -89,10 +91,12 @@ func is_menu_open() -> bool:
 
 
 func _open_menu() -> void:
-	if not GameTimeManager.is_running():
+	if not GameTimeManager.can_prepare_inn():
 		return
 	_menu_open = true
-	GameTimeManager.set_time_paused(true)
+	_paused_for_build_menu = GameTimeManager.is_simulation_active()
+	if _paused_for_build_menu:
+		GameTimeManager.set_time_paused(true)
 	main_button.text = "✕"
 	structure_button.show()
 	furniture_button.show()
@@ -114,10 +118,12 @@ func _reset_closed_ui() -> void:
 
 func _close_menu(unpause: bool = true) -> void:
 	var was_open: bool = _menu_open
+	var resume_time: bool = unpause and was_open and _paused_for_build_menu
+	_paused_for_build_menu = false
 	_reset_closed_ui()
 	if GameModeManager.current_mode != GameModes.Id.PLAY:
 		GameModeManager.set_mode(GameModes.Id.PLAY)
-	if unpause and was_open:
+	if resume_time:
 		GameTimeManager.set_time_paused(false)
 
 
@@ -150,7 +156,7 @@ func _populate_structure_options() -> void:
 	for option: Dictionary in CellData.build_paint_options():
 		var tile_type: CellData.TileType = option["tile_type"] as CellData.TileType
 		var label: String = option["label"] as String
-		var button := _create_tile_option_button(tile_type, label)
+		var button := _create_tile_option_button(tile_type, _format_tile_option_label(tile_type, label))
 		button.pressed.connect(_on_structure_option_pressed.bind(tile_type, button))
 		submenu_row.add_child(button)
 		if tile_type == GridService.current_paint_type:
@@ -166,7 +172,10 @@ func _populate_furniture_options() -> void:
 
 	for def_id: String in FurnitureCatalog.playable_def_ids():
 		var definition: FurnitureDefinition = FurnitureCatalog.get_definition(def_id)
-		var button := _create_furniture_option_button(def_id, definition.display_name)
+		var button := _create_furniture_option_button(
+			def_id,
+			_format_furniture_option_label(def_id, definition.display_name)
+		)
 		button.pressed.connect(_on_furniture_option_pressed.bind(def_id, button))
 		submenu_row.add_child(button)
 		if def_id == FurnitureService.current_def_id:
@@ -199,6 +208,20 @@ func _create_option_button(tooltip: String) -> Button:
 	_style_circle_button(button, OPTION_BUTTON_SIZE, 11)
 	button.mouse_entered.connect(_on_option_hover.bind(tooltip))
 	return button
+
+
+func _format_tile_option_label(tile_type: CellData.TileType, label: String) -> String:
+	var cost: int = GridService.get_tile_build_cost(tile_type)
+	if cost <= 0:
+		return label
+	return "%s · %d골드" % [label, cost]
+
+
+func _format_furniture_option_label(def_id: String, label: String) -> String:
+	var cost: int = FurnitureCatalog.build_cost_for(def_id)
+	if cost <= 0:
+		return label
+	return "%s · %d골드" % [label, cost]
 
 
 func _highlight_option_button(button: Button) -> void:
@@ -260,11 +283,11 @@ func _on_game_mode_changed(_previous_mode: int, next_mode: int) -> void:
 		_close_menu()
 
 
-func _on_day_phase_changed(_unused = null) -> void:
+func _on_day_phase_changed(_unused = null, _unused2 = null) -> void:
 	if _menu_open:
 		_close_menu()
 	_update_main_button_enabled()
 
 
 func _update_main_button_enabled(_unused = null) -> void:
-	main_button.disabled = not GameTimeManager.is_running()
+	main_button.disabled = not GameTimeManager.can_prepare_inn()

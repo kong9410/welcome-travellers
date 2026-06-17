@@ -8,22 +8,26 @@ static func all_def_ids() -> Array[String]:
 static func playable_def_ids() -> Array[String]:
 	return [
 		"chair",
+		"waiting_chair",
 		"table",
 		"bed",
 		"counter",
 		"barrel",
 		"room_door",
-		"hearth",
-		"prep_table",
 		"cauldron",
-		"pantry_shelf",
-		"pot_rack",
-		"bread_oven",
 	] as Array[String]
 
 
 static func get_definition(def_id: String) -> FurnitureDefinition:
 	match def_id:
+		"waiting_chair":
+			return _make(
+				"waiting_chair",
+				"대기의자",
+				Vector2i(1, 1),
+				DarkFantasyPalette.furn_chair.lightened(0.08),
+				"waiting"
+			)
 		"table":
 			return _make(
 				"table",
@@ -133,7 +137,63 @@ static func get_definition(def_id: String) -> FurnitureDefinition:
 
 
 static func allows_customer_on_tile(def_id: String) -> bool:
-	return def_id in (["chair", "bed", "room_door"] as Array[String])
+	return def_id in (["chair", "waiting_chair", "bed", "room_door"] as Array[String])
+
+
+static func build_cost_for(def_id: String) -> int:
+	match def_id:
+		"chair":
+			return 1
+		"waiting_chair":
+			return 1
+		"table":
+			return 3
+		"bed":
+			return 4
+		"counter":
+			return 8
+		"barrel":
+			return 2
+		"room_door":
+			return 3
+		"cauldron":
+			return 4
+		_:
+			return 0
+
+
+static func aesthetic_score_for(def_id: String) -> float:
+	match def_id:
+		"chair":
+			return 1.0
+		"waiting_chair":
+			return 0.5
+		"table":
+			return 1.5
+		"bed":
+			return 2.0
+		"owner_bed":
+			return 2.5
+		"counter":
+			return 1.5
+		"barrel":
+			return 0.0
+		"room_door":
+			return 0.25
+		"cauldron":
+			return 0.5
+		"hearth":
+			return 1.0
+		"prep_table":
+			return 0.75
+		"pantry_shelf":
+			return 0.75
+		"pot_rack":
+			return 0.5
+		"bread_oven":
+			return 1.0
+		_:
+			return 0.0
 
 
 static func _make(

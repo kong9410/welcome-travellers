@@ -2,33 +2,32 @@ class_name KitchenUpgradeService
 extends RefCounted
 
 const KITCHEN_DEF_IDS = [
-	"hearth",
-	"bread_oven",
-	"prep_table",
 	"cauldron",
-	"pantry_shelf",
-	"pot_rack",
 ]
 
 const QUALITY_BONUS: Dictionary = {
-	"hearth": 0.05,
-	"bread_oven": 0.06,
-	"prep_table": 0.04,
 	"cauldron": 0.04,
-	"pantry_shelf": 0.05,
-	"pot_rack": 0.03,
 }
 
 const FOOD_MENU = [
-	{"id": "plain_stew", "name": "간단한 스튜", "price": 8, "unlock_furniture": ""},
-	{"id": "hearth_stew", "name": "석화로 스튜", "price": 12, "unlock_furniture": "hearth"},
-	{"id": "broth", "name": "뼈 육수탕", "price": 10, "unlock_furniture": "hearth"},
-	{"id": "bread", "name": "갓 구운 빵", "price": 6, "unlock_furniture": "bread_oven"},
-	{"id": "meat_pie", "name": "고기 파이", "price": 14, "unlock_furniture": "bread_oven"},
-	{"id": "roast", "name": "구운 로스트", "price": 16, "unlock_furniture": "prep_table"},
-	{"id": "house_ale", "name": "하우스 에일", "price": 8, "unlock_furniture": "cauldron"},
-	{"id": "cheese_board", "name": "치즈 안주", "price": 11, "unlock_furniture": "pantry_shelf"},
-	{"id": "smoked_platter", "name": "훈제 모둠", "price": 15, "unlock_furniture": "pot_rack"},
+	{
+		"id": "bread",
+		"name": "빵",
+		"food_type": "bread",
+		"difficulty": 1,
+		"price": 1,
+		"ingredient_cost": 1,
+		"unlock_furniture": "",
+	},
+	{
+		"id": "basic_meal",
+		"name": "기본음식",
+		"food_type": "basic",
+		"difficulty": 2,
+		"price": 3,
+		"ingredient_cost": 2,
+		"unlock_furniture": "",
+	},
 ]
 
 const MAX_QUALITY_BONUS: float = 0.32

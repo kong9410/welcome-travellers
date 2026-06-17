@@ -1,6 +1,7 @@
 extends Node
 
 var _map_synced: Dictionary = {}
+var _rebuild_versions: Dictionary = {}
 
 
 func _ready() -> void:
@@ -44,8 +45,11 @@ func rebuild_view(view_id: ViewIds.Id) -> void:
 		return
 
 	_map_synced[view_id] = false
+	var version: int = int(_rebuild_versions.get(view_id, 0)) + 1
+	_rebuild_versions[view_id] = version
 	view.navigation_region.navigation_polygon = NavPolygonBuilder.build_for_view(view_id)
 	EventBus.navigation_rebuilt.emit(view_id)
+	call_deferred("_confirm_view_ready_after_rebuild", view_id, version)
 
 
 func rebuild_all_views() -> void:
@@ -87,6 +91,17 @@ func _mark_map_ready_for_rid(map_rid: RID) -> void:
 				return
 			_map_synced[view_id] = true
 			EventBus.navigation_map_ready.emit(view_id)
+
+
+func _confirm_view_ready_after_rebuild(view_id: ViewIds.Id, version: int) -> void:
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	if int(_rebuild_versions.get(view_id, 0)) != version:
+		return
+	if _map_synced.get(view_id, false):
+		return
+	_map_synced[view_id] = true
+	EventBus.navigation_map_ready.emit(view_id)
 
 
 func _on_navigation_map_changed(map_rid: RID) -> void:

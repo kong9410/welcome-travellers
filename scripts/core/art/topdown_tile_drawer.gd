@@ -2,6 +2,9 @@ class_name TopdownTileDrawer
 extends RefCounted
 
 const EDGE_WIDTH: float = 1.0
+const FLOOR_TEXTURE: Texture2D = preload("res://assets/tiles/floor.png")
+const WALL_TEXTURE: Texture2D = preload("res://assets/tiles/walls.png")
+const WALL_TEXTURE_TILE_SIZE: float = 64.0
 
 
 static func draw_tile(
@@ -39,6 +42,10 @@ static func draw_tile(
 
 
 static func _draw_floor(canvas: CanvasItem, rect: Rect2, color: Color) -> void:
+	if FLOOR_TEXTURE != null:
+		canvas.draw_texture_rect(FLOOR_TEXTURE, rect, false)
+		return
+
 	var top_color: Color = color.lightened(0.16)
 	var lower_color: Color = color.darkened(0.06)
 	var bevel: float = maxf(2.0, rect.size.y * 0.10)
@@ -62,6 +69,10 @@ static func _draw_floor(canvas: CanvasItem, rect: Rect2, color: Color) -> void:
 
 
 static func _draw_wall(canvas: CanvasItem, rect: Rect2, color: Color, rules: Dictionary = {}) -> void:
+	if WALL_TEXTURE != null:
+		_draw_wall_texture(canvas, rect, rules)
+		return
+
 	var cap_height: float = rect.size.y * 0.34
 	var connects_west: bool = rules.get("connects_west", false)
 	var connects_east: bool = rules.get("connects_east", false)
@@ -153,6 +164,44 @@ static func _draw_wall(canvas: CanvasItem, rect: Rect2, color: Color, rules: Dic
 		draw_back_left_corner,
 		draw_back_right_corner
 	)
+
+
+static func _draw_wall_texture(canvas: CanvasItem, rect: Rect2, rules: Dictionary = {}) -> void:
+	var source_cell: Vector2i = _wall_texture_source_cell(rules)
+	var source_rect := Rect2(
+		Vector2(source_cell) * WALL_TEXTURE_TILE_SIZE,
+		Vector2.ONE * WALL_TEXTURE_TILE_SIZE
+	)
+	canvas.draw_texture_rect_region(WALL_TEXTURE, rect, source_rect)
+
+
+static func _wall_texture_source_cell(rules: Dictionary = {}) -> Vector2i:
+	var floor_mask: int = int(rules.get("floor_mask", 0))
+	var floor_north: bool = (floor_mask & TopdownWallRules.FLOOR_NORTH) != 0
+	var floor_south: bool = (floor_mask & TopdownWallRules.FLOOR_SOUTH) != 0
+	var floor_west: bool = (floor_mask & TopdownWallRules.FLOOR_WEST) != 0
+	var floor_east: bool = (floor_mask & TopdownWallRules.FLOOR_EAST) != 0
+
+	# 3x3 sheet: NW N NE / W center E / SW S SE
+	if not (floor_north or floor_south or floor_west or floor_east):
+		return Vector2i(1, 1)
+	if floor_north and floor_west:
+		return Vector2i(0, 0)
+	if floor_north and floor_east:
+		return Vector2i(2, 0)
+	if floor_south and floor_west:
+		return Vector2i(0, 2)
+	if floor_south and floor_east:
+		return Vector2i(2, 2)
+	if floor_north:
+		return Vector2i(1, 0)
+	if floor_south:
+		return Vector2i(1, 2)
+	if floor_west:
+		return Vector2i(0, 1)
+	if floor_east:
+		return Vector2i(2, 1)
+	return Vector2i(1, 1)
 
 
 static func _draw_door(canvas: CanvasItem, rect: Rect2, color: Color, rules: Dictionary = {}) -> void:

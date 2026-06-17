@@ -10,6 +10,7 @@ var _view_changed_connected: bool = false
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	make_current()
 	zoom = Vector2.ONE
 	if not _view_changed_connected:

@@ -135,6 +135,11 @@ text = "시간: 08:00 (근무 중)"
 layout_mode = 2
 text = "여관주인: 휴식"
 
+[node name="RegionAestheticsLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+autowrap_mode = 3
+text = "방 미관: 없음"
+
 [node name="CellInfoLabel" type="Label" parent="Panel/MarginContainer/ScrollContainer/VBoxContainer"]
 layout_mode = 2
 text = "칸: (그리드에 마우스를 올리세요)"

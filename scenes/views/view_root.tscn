@@ -1,40 +1,114 @@
-[gd_scene load_steps=6 format=3 uid="uid://viewroot001"]
+[gd_scene format=3 uid="uid://viewroot001"]
 
-[ext_resource type="Script" path="res://scripts/views/view_root.gd" id="1_view_root"]
-[ext_resource type="Script" path="res://scripts/views/grid_visualizer.gd" id="2_grid_visualizer"]
-[ext_resource type="Script" path="res://scripts/views/grid_cell_renderer.gd" id="3_grid_cell_renderer"]
-[ext_resource type="Script" path="res://scripts/views/structure_ghost_renderer.gd" id="4_structure_ghost"]
-[ext_resource type="Script" path="res://scripts/views/furniture_ghost_renderer.gd" id="5_furniture_ghost"]
+[ext_resource type="Script" uid="uid://bubilv4gpjn2r" path="res://scripts/views/view_root.gd" id="1_view_root"]
+[ext_resource type="Script" uid="uid://dwro1tubilqpx" path="res://scripts/views/grid_visualizer.gd" id="2_grid_visualizer"]
+[ext_resource type="Script" uid="uid://culx0ee8epnrl" path="res://scripts/views/grid_cell_renderer.gd" id="3_grid_cell_renderer"]
+[ext_resource type="Script" uid="uid://s548rqh4oxlg" path="res://scripts/views/structure_ghost_renderer.gd" id="4_structure_ghost"]
+[ext_resource type="Script" uid="uid://baqqvgux6vftb" path="res://scripts/views/furniture_ghost_renderer.gd" id="5_furniture_ghost"]
+[ext_resource type="Texture2D" uid="uid://xgv4obdg1pde" path="res://assets/tiles/tiles.png" id="6_nbjac"]
 
-[node name="ViewRoot" type="Node2D"]
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_3l6aq"]
+texture = ExtResource("6_nbjac")
+texture_region_size = Vector2i(32, 32)
+0:0/0 = 0
+1:0/0 = 0
+2:0/0 = 0
+3:0/0 = 0
+4:0/0 = 0
+5:0/0 = 0
+6:0/0 = 0
+7:0/0 = 0
+0:1/0 = 0
+1:1/0 = 0
+2:1/0 = 0
+3:1/0 = 0
+4:1/0 = 0
+5:1/0 = 0
+6:1/0 = 0
+7:1/0 = 0
+0:2/0 = 0
+1:2/0 = 0
+2:2/0 = 0
+3:2/0 = 0
+4:2/0 = 0
+5:2/0 = 0
+6:2/0 = 0
+7:2/0 = 0
+0:3/0 = 0
+1:3/0 = 0
+2:3/0 = 0
+3:3/0 = 0
+4:3/0 = 0
+5:3/0 = 0
+6:3/0 = 0
+7:3/0 = 0
+0:4/0 = 0
+1:4/0 = 0
+2:4/0 = 0
+3:4/0 = 0
+4:4/0 = 0
+5:4/0 = 0
+6:4/0 = 0
+7:4/0 = 0
+0:5/0 = 0
+1:5/0 = 0
+2:5/0 = 0
+3:5/0 = 0
+4:5/0 = 0
+5:5/0 = 0
+6:5/0 = 0
+7:5/0 = 0
+0:6/0 = 0
+1:6/0 = 0
+2:6/0 = 0
+3:6/0 = 0
+4:6/0 = 0
+5:6/0 = 0
+6:6/0 = 0
+7:6/0 = 0
+0:7/0 = 0
+1:7/0 = 0
+2:7/0 = 0
+3:7/0 = 0
+4:7/0 = 0
+5:7/0 = 0
+6:7/0 = 0
+7:7/0 = 0
+
+[sub_resource type="TileSet" id="TileSet_agpc6"]
+tile_size = Vector2i(32, 32)
+sources/2 = SubResource("TileSetAtlasSource_3l6aq")
+
+[node name="ViewRoot" type="Node2D" unique_id=2077803179]
 script = ExtResource("1_view_root")
 
-[node name="GridVisualizer" type="Node2D" parent="."]
+[node name="GridVisualizer" type="Node2D" parent="." unique_id=1665386354]
 script = ExtResource("2_grid_visualizer")
 
-[node name="GridCellRenderer" type="Node2D" parent="."]
+[node name="GridCellRenderer" type="Node2D" parent="." unique_id=1017880084]
 z_index = 1
 script = ExtResource("3_grid_cell_renderer")
 
-[node name="StructureGhostRenderer" type="Node2D" parent="."]
+[node name="StructureGhostRenderer" type="Node2D" parent="." unique_id=1444792269]
 z_index = 2
 script = ExtResource("4_structure_ghost")
 
-[node name="FurnitureLayer" type="Node2D" parent="."]
+[node name="FurnitureLayer" type="Node2D" parent="." unique_id=929587002]
 z_index = 3
 y_sort_enabled = true
 
-[node name="FurnitureGhostRenderer" type="Node2D" parent="."]
+[node name="FurnitureGhostRenderer" type="Node2D" parent="." unique_id=487481718]
 z_index = 4
 script = ExtResource("5_furniture_ghost")
 
-[node name="TileMap" type="TileMap" parent="."]
+[node name="TileMap" type="TileMap" parent="." unique_id=1160033312]
 format = 2
 
-[node name="TerrainTileMap" type="TileMapLayer" parent="TileMap"]
+[node name="TerrainTileMap" type="TileMapLayer" parent="TileMap" unique_id=912773830]
+tile_set = SubResource("TileSet_agpc6")
 
-[node name="EntityLayer" type="Node2D" parent="."]
+[node name="EntityLayer" type="Node2D" parent="." unique_id=1713525814]
 z_index = 3
 y_sort_enabled = true
 
-[node name="NavigationRegion2D" type="NavigationRegion2D" parent="."]
+[node name="NavigationRegion2D" type="NavigationRegion2D" parent="." unique_id=743634294]

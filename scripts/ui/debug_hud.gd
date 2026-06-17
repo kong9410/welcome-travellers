@@ -13,6 +13,7 @@ extends Control
 @onready var queue_status_label: Label = $Panel/MarginContainer/ScrollContainer/VBoxContainer/QueueStatusLabel
 @onready var staff_clock_label: Label = $Panel/MarginContainer/ScrollContainer/VBoxContainer/StaffRow/StaffClockLabel
 @onready var staff_task_label: Label = $Panel/MarginContainer/ScrollContainer/VBoxContainer/StaffRow/StaffTaskLabel
+@onready var region_aesthetics_label: Label = $Panel/MarginContainer/ScrollContainer/VBoxContainer/RegionAestheticsLabel
 @onready var resolution_label: Label = $Panel/MarginContainer/ScrollContainer/VBoxContainer/ResolutionRow/ResolutionLabel
 @onready var resolution_option: OptionButton = $Panel/MarginContainer/ScrollContainer/VBoxContainer/ResolutionRow/ResolutionOption
 @onready var cell_info_label: Label = $Panel/MarginContainer/ScrollContainer/VBoxContainer/CellInfoLabel
@@ -33,6 +34,7 @@ extends Control
 
 var _queue_status_timer: float = 0.0
 const QUEUE_STATUS_REFRESH_INTERVAL: float = 0.25
+var _group_qa_report_label: Label = null
 
 
 func _ready() -> void:
@@ -43,6 +45,7 @@ func _ready() -> void:
 	_build_paint_options()
 	_build_theme_options()
 	_build_furniture_options()
+	_build_group_qa_controls()
 	_update_current_view_label(ViewManager.current_view_id)
 	_update_mode_label(GameModeManager.current_mode)
 	_update_day_period_label(DayNightManager.current_period)
@@ -50,6 +53,7 @@ func _ready() -> void:
 	_update_game_day_label()
 	_update_guest_count()
 	_update_queue_status()
+	_update_region_aesthetics_summary()
 	_update_staff_labels()
 	_update_resolution_label(DisplayManager.current_preset)
 	_update_cell_info(GridCoord.new(), CellData.new())
@@ -60,6 +64,7 @@ func _ready() -> void:
 	EventBus.view_changed.connect(_on_view_changed)
 	EventBus.resolution_changed.connect(_on_resolution_changed)
 	EventBus.grid_hover_changed.connect(_on_grid_hover_changed)
+	EventBus.grid_cell_changed.connect(_on_grid_cell_changed)
 	EventBus.grid_saved.connect(_on_grid_saved)
 	EventBus.grid_loaded.connect(_on_grid_loaded)
 	EventBus.game_mode_changed.connect(_on_game_mode_changed)
@@ -68,6 +73,7 @@ func _ready() -> void:
 	EventBus.furniture_placement_blocked.connect(_on_furniture_blocked)
 	EventBus.furniture_placed.connect(_on_furniture_changed)
 	EventBus.furniture_removed.connect(_on_furniture_changed)
+	EventBus.filth_changed.connect(_on_filth_changed)
 	EventBus.view_theme_changed.connect(_on_view_theme_changed)
 	EventBus.entity_selected.connect(_on_entity_selected)
 	EventBus.customer_selected.connect(_on_customer_selected)
@@ -75,11 +81,12 @@ func _ready() -> void:
 	EventBus.reputation_changed.connect(_on_reputation_changed)
 	EventBus.day_started.connect(_on_game_day_changed)
 	EventBus.day_ended.connect(_on_game_day_changed)
-	EventBus.morning_briefing_requested.connect(_on_game_day_changed)
+	EventBus.service_phase_changed.connect(_on_game_day_changed)
 	EventBus.customer_spawned.connect(_on_customer_spawned)
 	EventBus.customer_reviewed.connect(_on_customer_reviewed)
 	EventBus.game_over.connect(_on_game_over)
 	EventBus.game_hour_changed.connect(_on_game_hour_changed)
+	EventBus.service_phase_changed.connect(_on_service_phase_changed)
 	EventBus.staff_task_changed.connect(_on_staff_task_changed)
 	EventBus.debug_mode_changed.connect(_on_debug_mode_changed)
 
@@ -87,6 +94,93 @@ func _ready() -> void:
 	day_period_button.pressed.connect(_on_day_period_button_pressed)
 	end_day_button.pressed.connect(_on_end_day_pressed)
 	spawn_guest_button.pressed.connect(_on_spawn_guest_pressed)
+
+
+func _build_group_qa_controls() -> void:
+	var guest_row: HBoxContainer = $Panel/MarginContainer/ScrollContainer/VBoxContainer/GuestRow
+	var qa_row := HBoxContainer.new()
+	qa_row.add_theme_constant_override("separation", 6)
+
+	var spawn_group_button := Button.new()
+	spawn_group_button.text = "4인 단체"
+	spawn_group_button.pressed.connect(_on_spawn_group_pressed)
+	qa_row.add_child(spawn_group_button)
+
+	var limit_chair_button := Button.new()
+	limit_chair_button.text = "대기의자1"
+	limit_chair_button.pressed.connect(_on_limit_waiting_chair_pressed)
+	qa_row.add_child(limit_chair_button)
+
+	var clear_limit_button := Button.new()
+	clear_limit_button.text = "의자해제"
+	clear_limit_button.pressed.connect(_on_clear_waiting_chair_limit_pressed)
+	qa_row.add_child(clear_limit_button)
+
+	var qa_report_button := Button.new()
+	qa_report_button.text = "QA리포트"
+	qa_report_button.pressed.connect(_on_group_qa_report_pressed)
+	qa_row.add_child(qa_report_button)
+
+	guest_row.get_parent().add_child(qa_row)
+	guest_row.get_parent().move_child(qa_row, guest_row.get_index() + 1)
+
+	_group_qa_report_label = Label.new()
+	_group_qa_report_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_group_qa_report_label.text = ""
+	guest_row.get_parent().add_child(_group_qa_report_label)
+	guest_row.get_parent().move_child(_group_qa_report_label, qa_row.get_index() + 1)
+
+
+func _on_spawn_group_pressed() -> void:
+	if not _ensure_guest_spawn_ready():
+		return
+	var outside_customer: OutsideCustomerEntity = CustomerService.spawn_debug_group_outside(4)
+	if outside_customer == null:
+		help_label.text = "4인 단체 스폰 실패 (줄 가득 참 또는 outside 뷰 없음)."
+		return
+	help_label.text = "4인 단체 스폰: %s · F3 QA리포트로 상태 확인" % outside_customer.customer_id
+	_update_group_qa_report()
+
+
+func _on_limit_waiting_chair_pressed() -> void:
+	CustomerService.debug_set_waiting_chair_limit(1)
+	help_label.text = "대기의자 1개만 사용 가능 (나머지 디버그 잠금)."
+	_update_group_qa_report()
+	_update_queue_status()
+
+
+func _on_clear_waiting_chair_limit_pressed() -> void:
+	CustomerService.debug_clear_waiting_chair_limit()
+	help_label.text = "대기의자 디버그 잠금 해제."
+	_update_group_qa_report()
+	_update_queue_status()
+
+
+func _on_group_qa_report_pressed() -> void:
+	_update_group_qa_report()
+	help_label.text = "QA 리포트 갱신 (아래 + 줄 상태 참고)."
+
+
+func _update_group_qa_report() -> void:
+	if _group_qa_report_label == null:
+		return
+	_group_qa_report_label.text = CustomerService.get_group_qa_report()
+
+
+func _ensure_guest_spawn_ready() -> bool:
+	if not GameTimeManager.is_running():
+		help_label.text = "먼저 [영업 시작]으로 영업을 시작하세요."
+		return false
+	if not InnLayoutHelper.has_door(ViewIds.Id.INN_F1):
+		help_label.text = "건설: 여관 1층 외벽에 입구 문(외벽 슬롯)을 칠하세요."
+		return false
+	if InnLayoutHelper.find_entry_position(ViewIds.Id.INN_F1) == Vector2.ZERO:
+		help_label.text = "건설: 입구 문 안쪽에 바닥을 칠해 손님이 들어올 수 있게 하세요."
+		return false
+	if not InnLayoutHelper.has_interior_floor(ViewIds.Id.INN_F1):
+		help_label.text = "건설: 여관 1층 내부에 바닥을 칠하세요."
+		return false
+	return true
 	spawn_bandit_button.pressed.connect(_on_spawn_bandit_pressed)
 	save_button.pressed.connect(_on_save_pressed)
 	load_button.pressed.connect(_on_load_pressed)
@@ -102,6 +196,7 @@ func _process(delta: float) -> void:
 	if _queue_status_timer <= 0.0:
 		_queue_status_timer = QUEUE_STATUS_REFRESH_INTERVAL
 		_update_queue_status()
+		_update_region_aesthetics_summary()
 
 
 func _apply_passthrough_mouse_filters() -> void:
@@ -215,22 +310,12 @@ func _on_mode_button_pressed() -> void:
 
 
 func _on_end_day_pressed() -> void:
-	if GameTimeManager.is_running():
+	if GameTimeManager.phase in [GamePhases.Id.OPEN, GamePhases.Id.CLOSING]:
 		GameTimeManager.end_day()
 
 
 func _on_spawn_guest_pressed() -> void:
-	if not GameTimeManager.is_running():
-		help_label.text = "먼저 아침 브리핑에서 하루를 시작하세요."
-		return
-	if not InnLayoutHelper.has_door(ViewIds.Id.INN_F1):
-		help_label.text = "건설: 여관 1층 외벽에 입구 문(외벽 슬롯)을 칠하세요."
-		return
-	if InnLayoutHelper.find_entry_position(ViewIds.Id.INN_F1) == Vector2.ZERO:
-		help_label.text = "건설: 입구 문 안쪽에 바닥을 칠해 손님이 들어올 수 있게 하세요."
-		return
-	if not InnLayoutHelper.has_interior_floor(ViewIds.Id.INN_F1):
-		help_label.text = "건설: 여관 1층 내부에 바닥을 칠하세요."
+	if not _ensure_guest_spawn_ready():
 		return
 	CustomerService.spawn_customer()
 
@@ -243,7 +328,7 @@ func _on_reputation_changed() -> void:
 	_update_economy_labels()
 
 
-func _on_game_day_changed(_unused = null) -> void:
+func _on_game_day_changed(_unused = null, _unused2 = null) -> void:
 	_update_game_day_label()
 
 
@@ -272,6 +357,12 @@ func _on_game_over(reason: String) -> void:
 
 
 func _on_game_hour_changed(_hour: float) -> void:
+	_update_game_day_label()
+	_update_staff_labels()
+
+
+func _on_service_phase_changed(_previous_phase: GamePhases.Id, _next_phase: GamePhases.Id) -> void:
+	_update_game_day_label()
 	_update_staff_labels()
 
 
@@ -335,6 +426,7 @@ func _on_customer_selected(customer: CustomerEntity) -> void:
 func _on_view_changed(_previous_view_id: ViewIds.Id, next_view_id: ViewIds.Id) -> void:
 	CustomerService.clear_customer_selection()
 	_update_current_view_label(next_view_id)
+	_update_region_aesthetics_summary()
 	_sync_theme_option()
 
 
@@ -361,6 +453,16 @@ func _on_grid_hover_changed(coord: GridCoord, cell: CellData) -> void:
 	_update_cell_info(coord, cell)
 
 
+func _on_grid_cell_changed(view_id: ViewIds.Id, _coord: GridCoord, _cell: CellData) -> void:
+	if view_id == ViewManager.current_view_id:
+		_update_region_aesthetics_summary()
+
+
+func _on_filth_changed(view_id: ViewIds.Id) -> void:
+	if view_id == ViewManager.current_view_id:
+		_update_region_aesthetics_summary()
+
+
 func _on_build_blocked(_coord: GridCoord, reason: String) -> void:
 	help_label.text = reason
 
@@ -373,6 +475,7 @@ func _on_furniture_changed(_instance: FurnitureInstance = null) -> void:
 	if GameModeManager.current_mode == GameModes.Id.FURNITURE:
 		_update_mode_controls_visibility()
 	_update_queue_status()
+	_update_region_aesthetics_summary()
 
 
 func _on_grid_saved() -> void:
@@ -386,8 +489,12 @@ func _on_grid_loaded() -> void:
 	_update_economy_labels()
 	_update_game_day_label()
 	_update_guest_count()
+	_update_region_aesthetics_summary()
 	_update_staff_labels()
-	end_day_button.disabled = GameTimeManager.phase == GamePhases.Id.GAME_OVER
+	end_day_button.disabled = GameTimeManager.phase not in [
+		GamePhases.Id.OPEN,
+		GamePhases.Id.CLOSING,
+	]
 	_sync_theme_option()
 	_update_mode_controls_visibility()
 
@@ -401,9 +508,14 @@ func _update_economy_labels() -> void:
 
 
 func _update_game_day_label() -> void:
-	var phase_label: String = GamePhases.label_for(GameTimeManager.phase)
-	game_day_label.text = "여관 %d일차 (%s)" % [GameTimeManager.current_day, phase_label]
-	end_day_button.disabled = not GameTimeManager.is_running()
+	game_day_label.text = "여관 %s (%s)" % [
+		GameTimeManager.get_calendar_label(),
+		GameTimeManager.get_service_status_label(),
+	]
+	end_day_button.disabled = GameTimeManager.phase not in [
+		GamePhases.Id.OPEN,
+		GamePhases.Id.CLOSING,
+	]
 
 
 func _update_guest_count() -> void:
@@ -419,10 +531,42 @@ func _update_queue_status() -> void:
 	queue_status_label.visible = true
 	queue_status_label.text = CustomerService.get_debug_queue_status_text()
 	queue_status_label.add_theme_font_size_override("font_size", 10)
+	_update_group_qa_report()
+
+
+func _update_region_aesthetics_summary() -> void:
+	if region_aesthetics_label == null:
+		return
+	if not DebugService.is_active():
+		region_aesthetics_label.visible = false
+		return
+
+	region_aesthetics_label.visible = true
+	var view_id: ViewIds.Id = ViewManager.current_view_id
+	var region_count: int = RoomRegionService.get_region_count(view_id)
+	if region_count <= 0:
+		region_aesthetics_label.text = "방 미관: 구역 없음"
+		return
+
+	var lines: PackedStringArray = ["방 미관"]
+	var total_weighted_score: float = 0.0
+	var total_tiles: int = 0
+	for region_id in range(1, region_count + 1):
+		var coords: Array[GridCoord] = RoomRegionService.get_region_coords(view_id, region_id)
+		var tile_count: int = coords.size()
+		var score: float = RoomAestheticsService.get_region_aesthetics(view_id, region_id)
+		total_weighted_score += score * float(tile_count)
+		total_tiles += tile_count
+		lines.append("  #%d: %+.2f (%d칸)" % [region_id, score, tile_count])
+
+	var average_score: float = total_weighted_score / float(maxi(total_tiles, 1))
+	lines.insert(1, "  전체: %+.2f (%d구역)" % [average_score, region_count])
+	region_aesthetics_label.text = "\n".join(lines)
+	region_aesthetics_label.add_theme_font_size_override("font_size", 10)
 
 
 func _update_staff_labels() -> void:
-	var shift_text: String = "근무 중" if GameClock.is_work_hours() else "퇴근"
+	var shift_text: String = GameTimeManager.get_service_status_label()
 	staff_clock_label.text = "시간: %s (%s)" % [GameClock.get_time_label(), shift_text]
 	var keeper: InnkeeperEntity = StaffService.get_innkeeper()
 	if keeper == null:
@@ -470,13 +614,14 @@ func _update_mode_controls_visibility() -> void:
 				+ KitchenUpgradeService.get_kitchen_summary(ViewIds.Id.INN_F1)
 			)
 		_:
-			help_label.text = "플레이: 손님 클릭=상태 확인 | 여관주인 08–22 근무 | B/F 건설·가구 | F3 디버그"
+			help_label.text = "플레이: 손님 클릭=상태 확인 | 여관주인 12–22 근무 | B/F 건설·가구 | F3 디버그"
 
 
 func _on_debug_mode_changed(active: bool) -> void:
 	visible = active
 	if active:
 		_update_queue_status()
+		_update_region_aesthetics_summary()
 		_update_mode_controls_visibility()
 
 
@@ -511,14 +656,30 @@ func _update_cell_info(coord: GridCoord, cell: CellData) -> void:
 	var furniture: FurnitureInstance = FurnitureService.get_instance_at(coord)
 	var furniture_text := "없음"
 	if furniture != null:
-		furniture_text = FurnitureCatalog.get_definition(furniture.def_id).display_name
+		furniture_text = "%s (미관 %+.1f)" % [
+			FurnitureCatalog.get_definition(furniture.def_id).display_name,
+			FurnitureCatalog.aesthetic_score_for(furniture.def_id),
+		]
+	var region_id: int = RoomRegionService.get_region_id_at(coord)
+	var region_text: String = "없음"
+	if region_id != RoomRegionService.NO_REGION:
+		region_text = "#%d (%d칸, 미관 %s)" % [
+			region_id,
+			RoomRegionService.get_region_coords(coord.view_id, region_id).size(),
+			RoomAestheticsService.get_region_aesthetics_label(coord.view_id, region_id),
+		]
+	var filth_text: String = FilthService.get_filth_label_at(coord)
+	if filth_text == "":
+		filth_text = "없음"
 
-	cell_info_label.text = "칸: %s | %s | 이동:%s 확장:%s | 가구:%s" % [
+	cell_info_label.text = "칸: %s | %s | 이동:%s 확장:%s | 가구:%s | 구역:%s | 오염:%s" % [
 		coord.to_label(),
 		CellData.label_for(cell.tile_type),
 		walkable_text,
 		expand_text,
 		furniture_text,
+		region_text,
+		filth_text,
 	]
 
 

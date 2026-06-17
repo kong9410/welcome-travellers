@@ -7,7 +7,7 @@ signal door_clicked
 
 var door_rect: Rect2 = Rect2()
 
-var _current_hour: float = float(GameClock.SHIFT_START_HOUR)
+var _current_hour: float = float(GameClock.DEFAULT_OPEN_HOUR)
 
 
 func _ready() -> void:

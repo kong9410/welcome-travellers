@@ -1,11 +1,21 @@
 class_name CustomerEntity
 extends CharacterBody2D
 
+const GroupDiningConstants := preload("res://scripts/core/customer/group_dining_constants.gd")
+
 signal state_changed(state: CustomerStates.Id)
 signal finished(customer: CustomerEntity)
 
 const WAYPOINT_TOLERANCE: float = 6.0
+const PATH_WAYPOINT_TOLERANCE: float = 2.0
 const QUEUE_ARRIVAL_TOLERANCE: float = 14.0
+const MIN_EATING_HOURS: float = 0.5
+const MAX_EATING_HOURS: float = 1.0
+const UNREACHABLE_MOVE_TIMEOUT: float = 5.0
+const MAX_PATIENCE: float = 100.0
+const PATIENCE_DECAY_WAITING_CHAIR_PER_5_MIN: float = 2.0
+const PATIENCE_DECAY_COUNTER_PER_5_MIN: float = 5.0
+const PATIENCE_DECAY_FOOD_PER_5_MIN: float = 8.0
 
 @export var move_speed: float = 95.0
 
@@ -15,6 +25,7 @@ var persona: CustomerPersonas.Id = CustomerPersonas.Id.TRAVELER
 var current_state: CustomerStates.Id = CustomerStates.Id.TO_QUEUE_SLOT
 var order: Dictionary = {}
 var satisfaction: float = 0.75
+var patience: float = MAX_PATIENCE
 var was_served: bool = false
 var counter_position: Vector2 = Vector2.ZERO
 var queue_position: Vector2 = Vector2.ZERO
@@ -23,6 +34,7 @@ var chair_position: Vector2 = Vector2.ZERO
 var bed_position: Vector2 = Vector2.ZERO
 var exit_position: Vector2 = Vector2.ZERO
 var chair_instance_id: String = ""
+var waiting_chair_instance_id: String = ""
 var bed_instance_id: String = ""
 var checkout_day: int = 0
 var order_taken: bool = false
@@ -30,14 +42,25 @@ var bags_dropped: bool = false
 var lodging_meal_available: bool = false
 var needs: CustomerNeeds = CustomerNeeds.new()
 var is_selected: bool = false
+var group_id: String = ""
+var group_size: int = 1
+var is_group_leader: bool = false
+var is_group_highlighted: bool = false
+var group_companion_persona: CustomerPersonas.Id = CustomerPersonas.Id.TRAVELER
+var is_group_companion_waiting_for_leader: bool = false
+var group_meal_finished: bool = false
 
+var _exit_reason: String = ""
 var _state_timer: float = 0.0
 var _navigation_token: int = 0
 var _movement_target: Vector2 = Vector2.ZERO
 var _floor_path: Array[Vector2] = []
 var _path_retry_timer: float = 0.0
 var _food_served: bool = false
+var _food_paid: bool = false
+var _lodging_paid: bool = false
 var _move_stall_timer: float = 0.0
+var _unreachable_move_timer: float = 0.0
 var _debug_state_label: Label = null
 var _facing_direction: Vector2 = Vector2(0.0, 1.0)
 var _facing_dir: HumanFigureDrawer.FacingDir = HumanFigureDrawer.FacingDir.DOWN
@@ -74,10 +97,21 @@ func configure(
 	order = MenuCatalog.pick_service_request(view_id)
 	current_state = CustomerStates.Id.TO_QUEUE_SLOT
 	order_taken = false
+	patience = MAX_PATIENCE
 	bags_dropped = false
 	lodging_meal_available = false
 	checkout_day = 0
 	_food_served = false
+	_food_paid = false
+	_lodging_paid = false
+	group_id = ""
+	group_size = 1
+	is_group_leader = false
+	is_group_highlighted = false
+	group_companion_persona = CustomerPersonas.Id.TRAVELER
+	is_group_companion_waiting_for_leader = false
+	group_meal_finished = false
+	_exit_reason = ""
 	was_served = false
 	needs = CustomerNeeds.random_initial()
 	if get_order_type() == CustomerOrderTypes.Id.FOOD_AND_LODGING:
@@ -85,6 +119,8 @@ func configure(
 	is_selected = false
 	_state_timer = 0.0
 	_path_retry_timer = 0.0
+	_move_stall_timer = 0.0
+	_unreachable_move_timer = 0.0
 	_floor_path.clear()
 	queue_redraw()
 	_refresh_debug_state_label()
@@ -111,12 +147,25 @@ func sync_debug_visuals() -> void:
 
 
 func get_activity_label() -> String:
+	if group_meal_finished:
+		return "일행 기다리는 중"
 	return CustomerStates.activity_label_for(current_state, _food_served)
 
 
 func get_status_panel_text() -> String:
 	var lines: PackedStringArray = []
 	lines.append("손님: %s" % customer_id)
+	lines.append("분류: %s" % CustomerOrderTypes.customer_label_for(get_order_type()))
+	lines.append("인내심: %d/%d" % [int(round(patience)), int(MAX_PATIENCE)])
+	lines.append("만족도: %d/100" % int(round(satisfaction * 100.0)))
+	var region_aesthetics_text: String = _get_current_region_aesthetics_text()
+	if region_aesthetics_text != "":
+		lines.append(region_aesthetics_text)
+	if group_id != "":
+		var role_label: String = "대표" if is_group_leader else "동행"
+		lines.append("그룹: %s (%d인, %s)" % [group_id, group_size, role_label])
+	else:
+		lines.append("그룹: 개인")
 	lines.append("상태: %s" % get_activity_label())
 	lines.append(needs.format_line("배고픔", needs.hunger))
 	lines.append(needs.format_line("수면", needs.sleep))
@@ -127,8 +176,51 @@ func get_status_panel_text() -> String:
 	return "\n".join(lines)
 
 
+func get_panel_title() -> String:
+	if (
+		group_id != ""
+		and group_size >= GroupDiningConstants.MIN_GROUP_SIZE
+	):
+		var role_label: String = "대표" if is_group_leader else "동행"
+		return "%s · %d인 %s" % [customer_id, group_size, role_label]
+	return customer_id
+
+
+func _get_food_quality_satisfaction_bonus() -> float:
+	return FoodQuality.satisfaction_bonus_for(FoodQuality.from_value(order.get("quality")))
+
+
+func _get_current_region_aesthetics_text() -> String:
+	var seat_position: Vector2 = Vector2.ZERO
+	match current_state:
+		CustomerStates.Id.EATING:
+			seat_position = chair_position
+		CustomerStates.Id.SLEEPING, CustomerStates.Id.TO_BED, CustomerStates.Id.TO_BED_AFTER_MEAL:
+			seat_position = bed_position
+		_:
+			return ""
+	if seat_position == Vector2.ZERO:
+		return ""
+	return "구역 미관: %s" % RoomAestheticsService.get_aesthetics_label_at_world_position(view_id, seat_position)
+
+
+func _apply_region_aesthetics(seat_position: Vector2) -> void:
+	if seat_position == Vector2.ZERO:
+		return
+	var score: float = RoomAestheticsService.get_aesthetics_at_world_position(view_id, seat_position)
+	var bonus: float = RoomAestheticsService.satisfaction_bonus_for(score)
+	if bonus == 0.0:
+		return
+	satisfaction = clampf(satisfaction + bonus, 0.0, 1.0)
+
+
 func set_selected(selected: bool) -> void:
 	is_selected = selected
+	queue_redraw()
+
+
+func set_group_highlighted(highlighted: bool) -> void:
+	is_group_highlighted = highlighted
 	queue_redraw()
 
 
@@ -139,7 +231,10 @@ func contains_world_point(world_position: Vector2) -> bool:
 
 
 func get_debug_status_text() -> String:
-	var text: String = CustomerStates.label_for(current_state)
+	var text: String = "%s\n%s" % [
+		CustomerOrderTypes.customer_label_for(get_order_type()),
+		CustomerStates.label_for(current_state),
+	]
 	if current_state in [
 		CustomerStates.Id.TO_QUEUE_SLOT,
 		CustomerStates.Id.WAITING_IN_QUEUE,
@@ -184,6 +279,21 @@ func get_order_type() -> CustomerOrderTypes.Id:
 	return order.get("order_type", CustomerOrderTypes.Id.FOOD) as CustomerOrderTypes.Id
 
 
+func _resolve_exit_reason() -> String:
+	if not _exit_reason.is_empty():
+		return _exit_reason
+	return _success_exit_reason()
+
+
+func _success_exit_reason() -> String:
+	var order_type: CustomerOrderTypes.Id = get_order_type()
+	if CustomerOrderTypes.needs_lodging(order_type) and _lodging_paid:
+		return CustomerExitReasons.SUCCESS_LODGING
+	if CustomerOrderTypes.needs_food(order_type) and _food_paid:
+		return CustomerExitReasons.SUCCESS_MEAL
+	return CustomerExitReasons.SUCCESS_NORMAL
+
+
 func should_persist_overnight() -> bool:
 	if get_order_type() == CustomerOrderTypes.Id.FOOD_AND_LODGING:
 		return current_state in [
@@ -222,7 +332,12 @@ func on_order_accepted(
 	match get_order_type():
 		CustomerOrderTypes.Id.FOOD:
 			_begin_state(CustomerStates.Id.TO_CHAIR)
+		CustomerOrderTypes.Id.LODGING:
+			_complete_lodging_payment()
+			bags_dropped = false
+			_begin_state(CustomerStates.Id.TO_BED)
 		CustomerOrderTypes.Id.FOOD_AND_LODGING:
+			_complete_lodging_payment()
 			bags_dropped = false
 			lodging_meal_available = true
 			was_served = false
@@ -292,13 +407,16 @@ func update_queue_slot(index: int, slot_position: Vector2) -> bool:
 	return false
 
 
-func on_order_rejected() -> void:
+func on_order_rejected(reason: String = "주문을 처리할 수 없습니다.") -> void:
 	satisfaction = clampf(satisfaction - 0.35, 0.0, 1.0)
+	_exit_reason = reason
+	EventBus.customer_order_rejected.emit(self, reason)
 	_begin_state(CustomerStates.Id.LEAVING)
 
 
 func on_table_missing() -> void:
 	satisfaction = clampf(satisfaction - 0.4, 0.0, 1.0)
+	_exit_reason = CustomerExitReasons.TABLE_MISSING
 	_begin_state(CustomerStates.Id.LEAVING)
 
 
@@ -314,11 +432,24 @@ func mark_served() -> void:
 		return
 	was_served = true
 	_food_served = true
+	group_meal_finished = false
 	TableFoodService.place_food(self)
 	var kitchen_bonus: float = KitchenUpgradeService.get_satisfaction_bonus(view_id)
-	satisfaction = clampf(satisfaction + 0.18 + kitchen_bonus, 0.0, 1.0)
-	_state_timer = 2.6 if DayNightManager.is_day() else 3.8
+	var food_quality_bonus: float = _get_food_quality_satisfaction_bonus()
+	satisfaction = clampf(satisfaction + 0.18 + kitchen_bonus + food_quality_bonus, 0.0, 1.0)
+	_state_timer = randf_range(MIN_EATING_HOURS, MAX_EATING_HOURS) * GameClock.SECONDS_PER_HOUR
 	_update_physics_active()
+
+
+func complete_group_food_exit() -> void:
+	if current_state != CustomerStates.Id.EATING:
+		return
+	if not group_meal_finished:
+		return
+	group_meal_finished = false
+	_complete_food_payment()
+	_add_review()
+	_begin_state(CustomerStates.Id.LEAVING)
 
 
 func activate() -> void:
@@ -397,6 +528,7 @@ func build_floor_path(world_position: Vector2, token: int) -> void:
 			_on_move_finished()
 		return
 
+	_unreachable_move_timer = 0.0
 	_snap_to_floor()
 
 
@@ -444,15 +576,38 @@ func _begin_state(state: CustomerStates.Id) -> void:
 		CustomerStates.Id.EATING:
 			_floor_path.clear()
 			_food_served = false
+			_apply_region_aesthetics(chair_position)
+			if get_order_type() == CustomerOrderTypes.Id.FOOD and not GameClock.is_open_hours():
+				call_deferred("_serve_food_after_closing")
 		CustomerStates.Id.SLEEPING:
 			_floor_path.clear()
+			_apply_region_aesthetics(bed_position)
 			checkout_day = GameTimeManager.current_day + 1
 		CustomerStates.Id.LEAVING:
 			pass
 		CustomerStates.Id.DONE:
+			DayStatsService.record_exit_reason(_resolve_exit_reason())
 			finished.emit(self)
 	_update_physics_active()
 	_start_navigation_for_state(state)
+
+
+func _serve_food_after_closing() -> void:
+	if current_state != CustomerStates.Id.EATING:
+		return
+	if get_order_type() != CustomerOrderTypes.Id.FOOD:
+		return
+	if GameClock.is_open_hours():
+		return
+	mark_served()
+
+
+func _should_sync_group_food_exit() -> bool:
+	return (
+		group_id != ""
+		and group_size > 1
+		and get_order_type() == CustomerOrderTypes.Id.FOOD
+	)
 
 
 func _start_navigation_for_state(state: CustomerStates.Id) -> void:
@@ -479,28 +634,90 @@ func _update_physics_active() -> void:
 		CustomerStates.Id.TO_COUNTER, CustomerStates.Id.TO_QUEUE_SLOT, CustomerStates.Id.TO_CHAIR, CustomerStates.Id.TO_BED, CustomerStates.Id.TO_BED_AFTER_MEAL, CustomerStates.Id.LEAVING, CustomerStates.Id.DROPPING_BAGS:
 			should_run = true
 		CustomerStates.Id.EATING:
-			should_run = _food_served
+			should_run = _food_served and not group_meal_finished
 		_:
 			should_run = false
 	set_physics_process(should_run)
 
 
 func _complete_payment() -> void:
-	var base_price: int = order.get("price", 8)
+	var base_price: int = 0
+	if CustomerOrderTypes.needs_lodging(get_order_type()) and not _lodging_paid:
+		base_price = int(order.get("lodging_price", order.get("price", 8)))
+		_lodging_paid = true
+	elif CustomerOrderTypes.needs_food(get_order_type()) and not _food_paid:
+		base_price = int(order.get("food_price", order.get("price", 3)))
+		_food_paid = true
+	if base_price <= 0:
+		_add_review()
+		return
+
 	var theme_bonus: float = 1.0
 	if ThemeService.get_theme_id_for_view(view_id) == "rustic":
 		theme_bonus = 1.05
 	var tip: int = int(round(float(base_price) * satisfaction * CustomerPersonas.tip_multiplier(persona) * theme_bonus * 0.25))
 	var total: int = base_price + tip
 	EconomyManager.record_sale(total)
+	_add_review()
 
-	var rating: float = clampf(2.0 + satisfaction * 3.0, 1.0, 5.0)
+
+func _complete_lodging_payment() -> void:
+	if _lodging_paid:
+		return
+	var lodging_price: int = int(order.get("lodging_price", 8))
+	if lodging_price <= 0:
+		return
+	_lodging_paid = true
+	EconomyManager.record_sale(lodging_price)
+	DayStatsService.record_lodging()
+	_show_income_text(lodging_price)
+
+
+func _complete_food_payment() -> void:
+	if _food_paid:
+		return
+	var food_price: int = int(order.get("food_price", order.get("price", 3)))
+	if food_price <= 0:
+		return
+	_food_paid = true
+	EconomyManager.record_sale(food_price)
+	DayStatsService.record_meal()
+	_show_income_text(food_price)
+
+
+func _add_review() -> void:
+	var patience_score: float = clampf(patience / MAX_PATIENCE, 0.0, 1.0)
+	var experience_score: float = patience_score * 0.45 + satisfaction * 0.55
+	var rating: float = clampf(1.0 + experience_score * 4.0, 1.0, 5.0)
 	if CustomerOrderTypes.needs_food(get_order_type()) and not was_served:
 		rating = clampf(rating - 0.35, 1.0, 5.0)
 	var guest_name: String = "%s %s" % [CustomerPersonas.label_for(persona), customer_id]
 	var comment: String = _build_review_comment(rating)
 	ReputationManager.add_review(rating, guest_name, comment)
 	EventBus.customer_reviewed.emit(self, rating, comment)
+
+
+func _show_income_text(amount: int) -> void:
+	if amount <= 0:
+		return
+	var label := Label.new()
+	label.text = "+%d" % amount
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.position = Vector2(-32.0, -46.0)
+	label.custom_minimum_size = Vector2(64.0, 18.0)
+	label.z_index = 100
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35, 1.0))
+	label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
+	label.add_theme_constant_override("outline_size", 4)
+	add_child(label)
+
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y - 30.0, 0.9)
+	tween.tween_property(label, "modulate:a", 0.0, 0.9)
+	tween.finished.connect(label.queue_free)
 
 
 func _build_review_comment(rating: float) -> String:
@@ -514,31 +731,49 @@ func _build_review_comment(rating: float) -> String:
 
 
 func _physics_process(delta: float) -> void:
+	if not GameTimeManager.is_time_flowing():
+		velocity = Vector2.ZERO
+		_update_depth_sort()
+		return
+
+	var scaled_delta: float = GameTimeManager.scaled_delta(delta)
+
 	if current_state == CustomerStates.Id.DROPPING_BAGS:
-		_state_timer -= delta
+		_state_timer -= scaled_delta
 		if _state_timer <= 0.0:
 			_begin_state(CustomerStates.Id.SLEEPING)
 		_update_depth_sort()
 		return
 
 	if current_state == CustomerStates.Id.EATING:
+		if group_meal_finished:
+			_update_depth_sort()
+			return
 		if not _food_served:
 			_update_depth_sort()
 			return
-		_state_timer -= delta
+		_state_timer -= scaled_delta
 		if _state_timer <= 0.0:
 			TableFoodService.clear_food(self)
+			FilthService.spawn_empty_bowl_at_table(view_id, chair_instance_id)
+			if _should_sync_group_food_exit():
+				group_meal_finished = true
+				CustomerService.on_group_member_meal_finished(self)
+				_update_physics_active()
+				_update_depth_sort()
+				return
+			_complete_food_payment()
 			if get_order_type() == CustomerOrderTypes.Id.FOOD_AND_LODGING:
 				_begin_state(CustomerStates.Id.TO_BED_AFTER_MEAL)
 			else:
-				_complete_payment()
+				_add_review()
 				_begin_state(CustomerStates.Id.LEAVING)
 		_update_depth_sort()
 		return
 
 	if CustomerStates.is_moving(current_state):
 		if _floor_path.is_empty() and _movement_target == Vector2.ZERO:
-			_move_stall_timer += delta
+			_move_stall_timer += scaled_delta
 			if _move_stall_timer >= 0.5:
 				_move_stall_timer = 0.0
 				var retry_target: Vector2 = _get_move_retry_target()
@@ -551,6 +786,8 @@ func _physics_process(delta: float) -> void:
 
 
 func tick_needs(delta: float) -> void:
+	_tick_patience(delta)
+
 	var hunger_rate: float = 1.2
 	var sleep_rate: float = 1.0
 	var fatigue_rate: float = 1.4
@@ -602,8 +839,40 @@ func tick_needs(delta: float) -> void:
 	_try_request_lodging_meal()
 
 
+func _tick_patience(delta: float) -> void:
+	if patience <= 0.0:
+		return
+	var decay_per_5_minutes: float = _get_patience_decay_per_5_minutes()
+	if decay_per_5_minutes <= 0.0:
+		return
+
+	var game_minutes: float = delta / maxf(GameClock.SECONDS_PER_HOUR, 0.001) * 60.0
+	var decay: float = decay_per_5_minutes * game_minutes / 5.0
+	if decay <= 0.0:
+		return
+
+	patience = clampf(patience - decay, 0.0, MAX_PATIENCE)
+	if patience <= 0.0:
+		CustomerService.on_customer_patience_depleted(self)
+
+
+func _get_patience_decay_per_5_minutes() -> float:
+	match current_state:
+		CustomerStates.Id.WAITING_IN_QUEUE:
+			if waiting_chair_instance_id != "":
+				return PATIENCE_DECAY_WAITING_CHAIR_PER_5_MIN
+		CustomerStates.Id.REQUEST_PENDING, CustomerStates.Id.WAITING_AT_COUNTER:
+			return PATIENCE_DECAY_COUNTER_PER_5_MIN
+		CustomerStates.Id.EATING:
+			if not _food_served and not group_meal_finished:
+				return PATIENCE_DECAY_FOOD_PER_5_MIN
+	return 0.0
+
+
 func _try_request_lodging_meal() -> void:
 	if get_order_type() != CustomerOrderTypes.Id.FOOD_AND_LODGING:
+		return
+	if not GameClock.is_open_hours():
 		return
 	if current_state != CustomerStates.Id.SLEEPING:
 		return
@@ -612,6 +881,8 @@ func _try_request_lodging_meal() -> void:
 	if needs.hunger > CustomerNeeds.LODGING_MEAL_HUNGER_THRESHOLD:
 		return
 	if chair_position == Vector2.ZERO or chair_instance_id == "":
+		return
+	if not KitchenService.can_cook_order(self):
 		return
 
 	lodging_meal_available = false
@@ -649,7 +920,11 @@ func _process_floor_movement(delta: float) -> void:
 			_on_move_finished()
 			return
 		if _movement_target != Vector2.ZERO:
-			_path_retry_timer += delta
+			_path_retry_timer += GameTimeManager.scaled_delta(delta)
+			_unreachable_move_timer += GameTimeManager.scaled_delta(delta)
+			if _unreachable_move_timer >= UNREACHABLE_MOVE_TIMEOUT:
+				_handle_unreachable_move_target()
+				return
 			if _path_retry_timer >= 0.75:
 				_path_retry_timer = 0.0
 				_schedule_navigation(_movement_target)
@@ -657,6 +932,8 @@ func _process_floor_movement(delta: float) -> void:
 		return
 
 	var next_waypoint: Vector2 = _floor_path[0]
+	_unreachable_move_timer = 0.0
+	var distance_to_waypoint: float = global_position.distance_to(next_waypoint)
 	var direction: Vector2 = global_position.direction_to(next_waypoint)
 	if direction.length_squared() > 0.0001:
 		_facing_direction = direction
@@ -664,21 +941,39 @@ func _process_floor_movement(delta: float) -> void:
 		if next_facing_dir != _facing_dir:
 			_facing_dir = next_facing_dir
 			queue_redraw()
-		velocity = direction * move_speed
+		var scaled_speed: float = move_speed * GameTimeManager.time_scale
+		velocity = direction * minf(scaled_speed, distance_to_waypoint / maxf(delta, 0.0001))
 	else:
 		velocity = Vector2.ZERO
 	move_and_slide()
 
-	if global_position.distance_to(next_waypoint) <= WAYPOINT_TOLERANCE:
-		global_position = next_waypoint
+	if global_position.distance_to(next_waypoint) <= PATH_WAYPOINT_TOLERANCE:
 		_floor_path.pop_front()
 		if _floor_path.is_empty():
 			_snap_to_floor()
 			_on_move_finished()
 
 
+func _handle_unreachable_move_target() -> void:
+	_path_retry_timer = 0.0
+	_unreachable_move_timer = 0.0
+	_movement_target = Vector2.ZERO
+	_floor_path.clear()
+	match current_state:
+		CustomerStates.Id.TO_COUNTER, CustomerStates.Id.TO_QUEUE_SLOT:
+			CustomerService.unregister_waiting_customer(self)
+			on_order_rejected("카운터로 가는 길이 막혀 있습니다.")
+		CustomerStates.Id.TO_CHAIR, CustomerStates.Id.TO_BED, CustomerStates.Id.TO_BED_AFTER_MEAL:
+			on_order_rejected("배정된 자리로 갈 수 없습니다.")
+		CustomerStates.Id.LEAVING:
+			_begin_state(CustomerStates.Id.DONE)
+		_:
+			pass
+
+
 func _resolve_move_target(world_position: Vector2) -> Vector2:
 	if current_state in [
+		CustomerStates.Id.TO_QUEUE_SLOT,
 		CustomerStates.Id.TO_CHAIR,
 		CustomerStates.Id.TO_BED,
 		CustomerStates.Id.TO_BED_AFTER_MEAL,
@@ -719,7 +1014,7 @@ func _on_move_finished() -> void:
 			_floor_path.clear()
 			_begin_state(CustomerStates.Id.REQUEST_PENDING)
 		CustomerStates.Id.TO_QUEUE_SLOT:
-			satisfaction = 0.72 if InnLayoutHelper.is_floor_walkable(GridCoord.from_local(view_id, global_position)) else 0.55
+			satisfaction = 0.72 if InnLayoutHelper.is_customer_walkable(GridCoord.from_local(view_id, global_position)) else 0.55
 			_movement_target = Vector2.ZERO
 			_floor_path.clear()
 			if queue_index == 0:
@@ -731,6 +1026,9 @@ func _on_move_finished() -> void:
 			_floor_path.clear()
 			if not InnLayoutHelper.chair_has_table(view_id, chair_instance_id):
 				on_table_missing()
+				return
+			if FilthService.is_dining_chair_blocked(view_id, chair_instance_id):
+				on_order_rejected("테이블에 빈 그릇이 남아 있습니다.")
 				return
 			_begin_state(CustomerStates.Id.EATING)
 		CustomerStates.Id.TO_BED:
@@ -755,7 +1053,7 @@ func _draw() -> void:
 		persona,
 		get_order_type()
 	)
-	HumanFigureDrawer.draw(self, _facing_direction, style, is_selected)
+	HumanFigureDrawer.draw(self, _facing_direction, style, is_selected, is_group_highlighted)
 
 
 func _update_depth_sort() -> void:

@@ -30,6 +30,14 @@ func has_food_workload() -> bool:
 	return not _pending.is_empty() or not _cooking.is_empty() or not _ready.is_empty()
 
 
+func has_customer_order(customer: CustomerEntity) -> bool:
+	if customer == null:
+		return false
+	if customer in _pending or customer in _ready:
+		return true
+	return _is_customer_cooking(customer)
+
+
 func has_ready_orders() -> bool:
 	return not _ready.is_empty()
 
@@ -51,10 +59,23 @@ func has_cooking_in_progress() -> bool:
 
 
 func can_start_cooking() -> bool:
-	return _cooking.size() < MAX_PORTIONS and not _pending.is_empty()
+	if _cooking.size() >= MAX_PORTIONS or _pending.is_empty():
+		return false
+	_drop_uncookable_pending_orders()
+	if _pending.is_empty():
+		return false
+	var customer: CustomerEntity = peek_pending_customer()
+	return customer != null and can_cook_order(customer)
+
+
+func can_cook_order(customer: CustomerEntity) -> bool:
+	if customer == null or not is_instance_valid(customer):
+		return false
+	return FoodStorage.can_consume(get_ingredient_cost(customer))
 
 
 func peek_pending_customer() -> CustomerEntity:
+	_drop_invalid_pending_orders()
 	if _pending.is_empty():
 		return null
 	return _pending[0]
@@ -81,7 +102,11 @@ func get_debug_queue_lines() -> PackedStringArray:
 	for index in range(_pending.size()):
 		var customer = _pending[index]
 		if is_instance_valid(customer):
-			pending_entries.append("#%d %s" % [pending_entries.size() + 1, customer.customer_id])
+			pending_entries.append("#%d %s · 식재료 %d" % [
+				pending_entries.size() + 1,
+				customer.customer_id,
+				get_ingredient_cost(customer),
+			])
 	lines.append("조리 대기 (%d)" % pending_entries.size())
 	if pending_entries.is_empty():
 		lines.append("  (비어 있음)")
@@ -119,10 +144,23 @@ func get_debug_queue_lines() -> PackedStringArray:
 	return lines
 
 
+func get_primary_cooking_customer() -> CustomerEntity:
+	if _cooking.is_empty():
+		return null
+	var customer = _cooking[0].get("customer")
+	if is_instance_valid(customer):
+		return customer
+	return null
+
+
 func start_cooking(customer: CustomerEntity) -> bool:
 	if customer == null or not is_instance_valid(customer):
 		return false
 	if _cooking.size() >= MAX_PORTIONS:
+		return false
+	var ingredient_cost: int = get_ingredient_cost(customer)
+	if not FoodStorage.consume_food(ingredient_cost):
+		_cancel_pending_customer_for_missing_ingredients(customer)
 		return false
 	_pending.erase(customer)
 	_cooking.append({
@@ -130,6 +168,12 @@ func start_cooking(customer: CustomerEntity) -> bool:
 		"remaining": COOK_DURATION,
 	})
 	return true
+
+
+func get_ingredient_cost(customer: CustomerEntity) -> int:
+	if customer == null or not is_instance_valid(customer):
+		return 0
+	return int(customer.order.get("ingredient_cost", 1))
 
 
 func get_serve_position(customer: CustomerEntity) -> Vector2:
@@ -166,16 +210,45 @@ func release_customer(customer: CustomerEntity) -> void:
 			_cooking.remove_at(i)
 
 
+func _drop_invalid_pending_orders() -> void:
+	for index in range(_pending.size() - 1, -1, -1):
+		if not is_instance_valid(_pending[index]):
+			_pending.remove_at(index)
+
+
+func _drop_uncookable_pending_orders() -> void:
+	_drop_invalid_pending_orders()
+	for index in range(_pending.size() - 1, -1, -1):
+		var customer: CustomerEntity = _pending[index]
+		if can_cook_order(customer):
+			continue
+		_cancel_pending_customer_for_missing_ingredients(customer)
+
+
+func _cancel_pending_customer_for_missing_ingredients(customer: CustomerEntity) -> void:
+	if customer == null:
+		return
+	_pending.erase(customer)
+	_ready.erase(customer)
+	for index in range(_cooking.size() - 1, -1, -1):
+		if (_cooking[index] as Dictionary).get("customer") == customer:
+			_cooking.remove_at(index)
+	if is_instance_valid(customer):
+		customer.on_order_rejected("식재료가 부족합니다.")
+		CustomerService.release_customer(customer)
+
+
 func _process(delta: float) -> void:
 	if not GameTimeManager.is_time_flowing():
 		return
 	if _cooking.is_empty():
 		return
 
+	var scaled_delta: float = GameTimeManager.scaled_delta(delta)
 	var finished: Array[CustomerEntity] = []
 
 	for entry: Dictionary in _cooking:
-		var remaining: float = float(entry.get("remaining", 0.0)) - delta
+		var remaining: float = float(entry.get("remaining", 0.0)) - scaled_delta
 		entry["remaining"] = remaining
 		if remaining > 0.0:
 			continue
@@ -190,6 +263,7 @@ func _process(delta: float) -> void:
 		for index in range(_cooking.size() - 1, -1, -1):
 			if (_cooking[index] as Dictionary).get("customer") == customer:
 				_cooking.remove_at(index)
+		_resolve_food_quality(customer)
 		if customer not in _ready:
 			_ready.append(customer)
 		StaffService.on_kitchen_order_ready()
@@ -200,3 +274,22 @@ func _is_customer_cooking(customer: CustomerEntity) -> bool:
 		if entry.get("customer") == customer:
 			return true
 	return false
+
+
+func _resolve_food_quality(customer: CustomerEntity) -> void:
+	if customer == null or not is_instance_valid(customer):
+		return
+	if customer.order.has("quality"):
+		return
+	var cooking_level: int = 1
+	var innkeeper: InnkeeperEntity = StaffService.get_innkeeper()
+	if is_instance_valid(innkeeper):
+		cooking_level = innkeeper.cooking_level
+		customer.order["maker_id"] = innkeeper.staff_id
+		customer.order["maker_label"] = "여관주인"
+		customer.order["maker_cooking_level"] = cooking_level
+		innkeeper.add_cooking_experience()
+	customer.order["quality"] = FoodQualityResolver.roll_quality(
+		customer.order,
+		cooking_level
+	)

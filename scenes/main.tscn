@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://debuhud001" path="res://scenes/ui/debug_hud.tscn" id="3_debug_hud"]
 [ext_resource type="Script" uid="uid://ccsa3w73tmgei" path="res://scripts/input/grid_input_controller.gd" id="4_grid_input"]
 [ext_resource type="PackedScene" uid="uid://viewtrans01" path="res://scenes/ui/view_transition_overlay.tscn" id="5_transition"]
-[ext_resource type="PackedScene" uid="uid://3j1qhoj2vq5q" path="res://scenes/ui/morning_briefing.tscn" id="6_briefing"]
+[ext_resource type="PackedScene" uid="uid://daysettle01" path="res://scenes/ui/day_settlement_popup.tscn" id="6_settlement"]
 [ext_resource type="PackedScene" uid="uid://playerhud001" path="res://scenes/ui/player_hud.tscn" id="7_player_hud"]
 [ext_resource type="Script" uid="uid://1burwnrydopb" path="res://scripts/input/camera_controller.gd" id="8_camera_controller"]
 [ext_resource type="PackedScene" uid="uid://b4k3t57831y05" path="res://scenes/views/outside_view_root.tscn" id="9_outside_view"]
@@ -49,4 +49,4 @@ script = ExtResource("4_grid_input")
 
 [node name="ViewTransitionOverlay" parent="UI" unique_id=101297733 instance=ExtResource("5_transition")]
 
-[node name="MorningBriefing" parent="UI" unique_id=1232218972 instance=ExtResource("6_briefing")]
+[node name="DaySettlementPopup" parent="UI" unique_id=1232218972 instance=ExtResource("6_settlement")]

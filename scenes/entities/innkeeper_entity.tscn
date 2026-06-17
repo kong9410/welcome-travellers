@@ -1,13 +1,13 @@
 [gd_scene format=3 uid="uid://innkeeper1"]
 
-[ext_resource type="Script" path="res://scripts/entities/innkeeper_entity.gd" id="1_innkeeper"]
+[ext_resource type="Script" uid="uid://s13cwlwp77cf" path="res://scripts/entities/innkeeper_entity.gd" id="1_innkeeper"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_innkeeper"]
 radius = 8.0
 
-[node name="InnkeeperEntity" type="CharacterBody2D"]
+[node name="InnkeeperEntity" type="CharacterBody2D" unique_id=1756149484]
 motion_mode = 1
 script = ExtResource("1_innkeeper")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1578738641]
 shape = SubResource("CircleShape2D_innkeeper")

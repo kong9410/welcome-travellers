@@ -7,13 +7,41 @@ signal job_finished(job: StaffJob)
 @export var move_speed: float = 88.0
 
 const COOK_PATROL_DURATION: float = 2.6
+const MIN_COOKING_LEVEL: int = 1
+const MAX_COOKING_LEVEL: int = 20
+const COOKING_XP_PER_COMPLETED_DISH: int = 1
+const COOKING_XP_REQUIREMENTS: Array[int] = [
+	100,
+	200,
+	300,
+	400,
+	500,
+	600,
+	700,
+	800,
+	1000,
+	1250,
+	1500,
+	2000,
+	2500,
+	3000,
+	4000,
+	5000,
+	6000,
+	8000,
+	10000,
+]
 const WAYPOINT_TOLERANCE: float = 6.0
+const PATH_WAYPOINT_TOLERANCE: float = 2.0
 const JOB_ARRIVAL_TOLERANCE: float = 14.0
 
 var staff_id: String = "innkeeper"
 var view_id: ViewIds.Id = ViewIds.Id.INN_F1
 var current_task: StaffTasks.Id = StaffTasks.Id.REST
 var current_job: StaffJob = null
+var cooking_level: int = MIN_COOKING_LEVEL
+var cooking_xp: int = 0
+var is_selected: bool = false
 
 var _work_timer: float = 0.0
 var _was_navigating: bool = false
@@ -48,9 +76,62 @@ func _ready() -> void:
 
 func configure(p_view_id: ViewIds.Id, spawn_position: Vector2) -> void:
 	view_id = p_view_id
+	cooking_level = clampi(cooking_level, MIN_COOKING_LEVEL, MAX_COOKING_LEVEL)
 	global_position = InnLayoutHelper.snap_to_floor_world(view_id, spawn_position)
 	_update_depth_sort()
 	queue_redraw()
+
+
+func set_cooking_level(level: int) -> void:
+	cooking_level = clampi(level, MIN_COOKING_LEVEL, MAX_COOKING_LEVEL)
+	if cooking_level >= MAX_COOKING_LEVEL:
+		cooking_xp = 0
+
+
+func add_cooking_experience(amount: int = COOKING_XP_PER_COMPLETED_DISH) -> void:
+	if amount <= 0 or cooking_level >= MAX_COOKING_LEVEL:
+		return
+	cooking_xp += amount
+	while cooking_level < MAX_COOKING_LEVEL:
+		var required_xp: int = get_required_cooking_xp_for_next_level()
+		if required_xp <= 0 or cooking_xp < required_xp:
+			break
+		cooking_xp -= required_xp
+		cooking_level += 1
+	if cooking_level >= MAX_COOKING_LEVEL:
+		cooking_level = MAX_COOKING_LEVEL
+		cooking_xp = 0
+	queue_redraw()
+
+
+func get_required_cooking_xp_for_next_level() -> int:
+	if cooking_level >= MAX_COOKING_LEVEL:
+		return 0
+	var index: int = clampi(cooking_level - MIN_COOKING_LEVEL, 0, COOKING_XP_REQUIREMENTS.size() - 1)
+	return COOKING_XP_REQUIREMENTS[index]
+
+
+func set_selected(selected: bool) -> void:
+	is_selected = selected
+	queue_redraw()
+
+
+func contains_world_point(world_position: Vector2) -> bool:
+	var local_position: Vector2 = to_local(world_position)
+	var hit_rect := Rect2(-12.0, -24.0, 24.0, 30.0)
+	return hit_rect.has_point(local_position)
+
+
+func get_status_panel_text() -> String:
+	var lines: PackedStringArray = []
+	lines.append("직원: 여관주인")
+	lines.append("상태: %s" % StaffTasks.label_for(current_task))
+	lines.append("요리레벨: %d" % cooking_level)
+	if cooking_level >= MAX_COOKING_LEVEL:
+		lines.append("요리경험치: MAX")
+	else:
+		lines.append("요리경험치: %d/%d" % [cooking_xp, get_required_cooking_xp_for_next_level()])
+	return "\n".join(lines)
 
 
 func activate() -> void:
@@ -173,13 +254,20 @@ func _build_floor_path(world_position: Vector2, token: int) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if not GameTimeManager.is_time_flowing():
+		velocity = Vector2.ZERO
+		_update_depth_sort()
+		return
+
+	var scaled_delta: float = GameTimeManager.scaled_delta(delta)
+
 	if current_job == null:
 		_process_floor_movement(delta)
 		_update_depth_sort()
 		return
 
 	if _work_timer > 0.0:
-		_work_timer -= delta
+		_work_timer -= scaled_delta
 		velocity = Vector2.ZERO
 		if _work_timer <= 0.0:
 			_finish_job()
@@ -187,12 +275,12 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if current_job != null and not _job_travel_ready and _work_timer <= 0.0:
-		_nav_wait_elapsed += delta
+		_nav_wait_elapsed += scaled_delta
 		if _nav_wait_elapsed >= 0.35:
 			_force_navigation_ready()
 
 	if current_job.task == StaffTasks.Id.COOK and _cook_patrol_active:
-		_cook_patrol_elapsed += delta
+		_cook_patrol_elapsed += scaled_delta
 		if _cook_patrol_elapsed >= COOK_PATROL_DURATION:
 			_cook_patrol_active = false
 			_work_timer = 0.5
@@ -211,7 +299,7 @@ func _process_floor_movement(delta: float) -> void:
 			_handle_travel_arrival()
 			return
 		if _movement_target != Vector2.ZERO and _job_travel_ready:
-			_path_retry_timer += delta
+			_path_retry_timer += GameTimeManager.scaled_delta(delta)
 			if _path_retry_timer >= 0.35:
 				_path_retry_timer = 0.0
 				if _try_force_unreachable_job():
@@ -223,6 +311,7 @@ func _process_floor_movement(delta: float) -> void:
 
 	_was_navigating = true
 	var next_waypoint: Vector2 = _floor_path[0]
+	var distance_to_waypoint: float = global_position.distance_to(next_waypoint)
 	var direction: Vector2 = global_position.direction_to(next_waypoint)
 	if direction.length_squared() > 0.0001:
 		_facing_direction = direction
@@ -230,13 +319,13 @@ func _process_floor_movement(delta: float) -> void:
 		if next_facing_dir != _facing_dir:
 			_facing_dir = next_facing_dir
 			queue_redraw()
-		velocity = direction * move_speed
+		var scaled_speed: float = move_speed * GameTimeManager.time_scale
+		velocity = direction * minf(scaled_speed, distance_to_waypoint / maxf(delta, 0.0001))
 	else:
 		velocity = Vector2.ZERO
 	move_and_slide()
 
-	if global_position.distance_to(next_waypoint) <= WAYPOINT_TOLERANCE:
-		global_position = next_waypoint
+	if global_position.distance_to(next_waypoint) <= PATH_WAYPOINT_TOLERANCE:
 		_floor_path.pop_front()
 		if _floor_path.is_empty():
 			_snap_to_floor()
@@ -467,7 +556,8 @@ func _draw() -> void:
 	HumanFigureDrawer.draw(
 		self,
 		_facing_direction,
-		HumanFigureDrawer.style_for_innkeeper()
+		HumanFigureDrawer.style_for_innkeeper(),
+		is_selected
 	)
 
 

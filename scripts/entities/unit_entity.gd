@@ -70,6 +70,11 @@ func contains_world_point(world_position: Vector2) -> bool:
 
 
 func _physics_process(_delta: float) -> void:
+	if not GameTimeManager.is_time_flowing():
+		velocity = Vector2.ZERO
+		_update_depth_sort()
+		return
+
 	if navigation_agent.is_navigation_finished():
 		if velocity.length_squared() > 0.0:
 			velocity = Vector2.ZERO
@@ -81,7 +86,7 @@ func _physics_process(_delta: float) -> void:
 	var direction: Vector2 = global_position.direction_to(next_path_position)
 	if direction.length_squared() > 0.0:
 		_facing_direction = direction
-		velocity = direction * move_speed
+		velocity = direction * move_speed * GameTimeManager.time_scale
 	else:
 		velocity = Vector2.ZERO
 	move_and_slide()

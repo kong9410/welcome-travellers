@@ -110,7 +110,8 @@ static func draw(
 	canvas: CanvasItem,
 	facing: Vector2,
 	style: FigureStyle,
-	selected: bool = false
+	selected: bool = false,
+	group_highlighted: bool = false
 ) -> void:
 	var facing_dir: FacingDir = resolve_facing_dir(facing)
 	var figure_offset := Vector2(0.0, -FOOT_ANCHOR_Y)
@@ -130,6 +131,8 @@ static func draw(
 		FacingDir.LEFT:
 			_draw_side(canvas, style, true, figure_offset)
 
+	if group_highlighted:
+		_draw_group_ring(canvas)
 	if selected:
 		_draw_selection_ring(canvas)
 
@@ -286,6 +289,10 @@ static func _draw_shadow(canvas: CanvasItem) -> void:
 static func _draw_selection_ring(canvas: CanvasItem) -> void:
 	canvas.draw_arc(Vector2.ZERO, 11.0, 0.0, TAU, 28, DarkFantasyPalette.brass_bright, 2.0)
 	canvas.draw_arc(Vector2.ZERO, 7.0, 0.0, TAU, 24, DarkFantasyPalette.brass_bright.darkened(0.18), 1.0)
+
+
+static func _draw_group_ring(canvas: CanvasItem) -> void:
+	canvas.draw_arc(Vector2.ZERO, 13.0, 0.0, TAU, 32, Color(0.35, 0.82, 1.0, 0.95), 2.0)
 
 
 static func _draw_limb(canvas: CanvasItem, position: Vector2, size: Vector2, color: Color) -> void:

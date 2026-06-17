@@ -95,7 +95,6 @@ static func build_paint_options() -> Array[Dictionary]:
 		{"tile_type": TileType.DOOR, "label": "입구 문 (외벽)"},
 		{"tile_type": TileType.STAIRS_UP, "label": "위층 계단 (연결)"},
 		{"tile_type": TileType.STAIRS_DOWN, "label": "아래층 계단 (연결)"},
-		{"tile_type": TileType.OUTSIDE_GROUND, "label": "야외 바닥"},
 		{"tile_type": TileType.EMPTY, "label": "지우기"},
 	] as Array[Dictionary]
 

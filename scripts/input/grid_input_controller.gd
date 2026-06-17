@@ -8,6 +8,7 @@ var _last_drag_coord: GridCoord = GridCoord.new(-1, -1, ViewIds.Id.OUTSIDE)
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_process(enable_painting)
 
 
@@ -21,7 +22,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if _is_settings_menu_open():
 		return
-	if GameTimeManager.is_briefing() or GameTimeManager.phase == GamePhases.Id.GAME_OVER:
+	if GameTimeManager.is_pre_open() or GameTimeManager.phase == GamePhases.Id.GAME_OVER:
 		return
 
 	if event is InputEventKey:
@@ -116,13 +117,37 @@ func _handle_left_click() -> void:
 
 	if GameModeManager.is_play_mode():
 		var world_position: Vector2 = _get_active_world_position()
-		if CustomerService.try_select_at(world_position, ViewManager.current_view_id):
+		if TableFoodService.try_select_at(world_position, ViewManager.current_view_id):
+			FurnitureService.clear_selection()
+			CustomerService.clear_customer_selection()
+			StaffService.clear_staff_selection()
 			EntityService.clear_selection()
 			return
-		if EntityService.try_select_at(world_position):
-			CustomerService.clear_customer_selection()
+		TableFoodService.clear_food_selection()
+		StaffService.clear_staff_selection()
+		if CustomerService.try_select_at(world_position, ViewManager.current_view_id):
+			FurnitureService.clear_selection()
+			EntityService.clear_selection()
 			return
 		CustomerService.clear_customer_selection()
+		if StaffService.try_select_at(world_position, ViewManager.current_view_id):
+			FurnitureService.clear_selection()
+			EntityService.clear_selection()
+			return
+		StaffService.clear_staff_selection()
+		if FurnitureService.try_select_at(world_position, ViewManager.current_view_id):
+			EntityService.clear_selection()
+			TableFoodService.clear_food_selection()
+			CustomerService.clear_customer_selection()
+			StaffService.clear_staff_selection()
+			return
+		if EntityService.try_select_at(world_position):
+			FurnitureService.clear_selection()
+			StaffService.clear_staff_selection()
+			TableFoodService.clear_food_selection()
+			return
+		FurnitureService.clear_selection()
+		StaffService.clear_staff_selection()
 		EntityService.clear_selection()
 		return
 
@@ -154,12 +179,18 @@ func _handle_outside_left_click() -> void:
 	if GameModeManager.is_play_mode():
 		var world_position: Vector2 = _get_active_world_position()
 		if CustomerService.try_select_at(world_position, ViewIds.Id.OUTSIDE):
+			TableFoodService.clear_food_selection()
+			StaffService.clear_staff_selection()
 			EntityService.clear_selection()
 			return
 		if EntityService.try_select_at(world_position):
+			TableFoodService.clear_food_selection()
 			CustomerService.clear_customer_selection()
+			StaffService.clear_staff_selection()
 			return
 		CustomerService.clear_customer_selection()
+		TableFoodService.clear_food_selection()
+		StaffService.clear_staff_selection()
 		EntityService.clear_selection()
 
 	if active_view is OutsideViewRoot:

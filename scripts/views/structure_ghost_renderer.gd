@@ -9,6 +9,7 @@ var _paint_type: CellData.TileType = CellData.TileType.FLOOR
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	z_index = 2
 	set_process(true)
 	EventBus.game_mode_changed.connect(_on_refresh)

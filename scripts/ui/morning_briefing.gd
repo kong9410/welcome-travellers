@@ -23,7 +23,7 @@ func _on_briefing_requested(_day: int) -> void:
 	_refresh_labels()
 	show()
 	start_button.disabled = false
-	start_button.text = "Open Inn (Start Day %d)" % GameTimeManager.current_day
+	start_button.text = "Open Inn (%s)" % GameTimeManager.get_calendar_label()
 
 
 func _on_day_settled(summary: Dictionary) -> void:
@@ -47,21 +47,22 @@ func _on_start_pressed() -> void:
 
 
 func _refresh_labels(_unused = null) -> void:
-	title_label.text = "Morning Briefing — Day %d" % GameTimeManager.current_day
+	title_label.text = "Morning Briefing — %s" % GameTimeManager.get_calendar_label()
 	var period_label: String = DayPeriods.label_for(DayNightManager.current_period)
 	var warning_text: String = ""
 	if EconomyManager.is_warning_week():
-		warning_text = "\nWarning: losses are stacking (%d days)." % EconomyManager.consecutive_loss_days
+		warning_text = "\nWarning: 보유 금액이 0골드 미만입니다 (%d/3일)." % EconomyManager.negative_gold_days
 	if not InnLayoutHelper.has_service_space(ViewIds.Id.INN_F1):
 		warning_text += "\nTip: paint Floor from the door inward so guests can enter and sit."
 
 	summary_label.text = (
-		"Gold: %d | Loan: %d | Rating: %.1f\nPeriod: %s | Shift: 08:00-22:00 | Upkeep: %d/day | Interest: %.0f%%%s"
+		"Gold: %d | Loan: %d | Rating: %.1f\nPeriod: %s | Shift: %s | Upkeep: %d/day | Interest: %.0f%%%s"
 		% [
 			EconomyManager.gold,
 			EconomyManager.loan_balance,
 			ReputationManager.average_rating,
 			period_label,
+			GameClock.get_hours_label(),
 			EconomyManager.DAILY_UPKEEP,
 			EconomyManager.LOAN_INTEREST_RATE * 100.0,
 			warning_text,

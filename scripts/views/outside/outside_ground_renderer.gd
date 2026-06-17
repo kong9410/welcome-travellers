@@ -4,7 +4,7 @@ extends Node2D
 const WORLD_WIDTH: float = OutsideViewConstants.WORLD_WIDTH
 const GROUND_Y: float = OutsideViewConstants.GROUND_LINE_Y
 
-var _current_hour: float = float(GameClock.SHIFT_START_HOUR)
+var _current_hour: float = float(GameClock.DEFAULT_OPEN_HOUR)
 
 
 func _ready() -> void:

@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH := "user://inn_grid_save.json"
-const SAVE_VERSION := 5
+const SAVE_VERSION := 9
 
 var current_paint_type: CellData.TileType = CellData.TileType.FLOOR
 
@@ -69,7 +69,9 @@ func get_paint_block_reason(coord: GridCoord, tile_type: CellData.TileType) -> S
 	if paint_reason != "":
 		return paint_reason
 
-	if GameModeManager.is_build_mode() and not grid.can_expand_to(coord, tile_type):
+	var current_cell: CellData = grid.get_cell(coord)
+	var is_replacing_owned_tile: bool = current_cell.is_owned and tile_type != CellData.TileType.EMPTY
+	if GameModeManager.is_build_mode() and not is_replacing_owned_tile and not grid.can_expand_to(coord, tile_type):
 		return "기존 타일과 인접한 곳부터 확장해야 합니다."
 
 	return ""
@@ -90,6 +92,15 @@ func paint_tile(coord: GridCoord, tile_type: CellData.TileType = current_paint_t
 	elif tile_type == CellData.TileType.DOOR and coord.view_id == ViewIds.Id.INN_F1:
 		return _relocate_inn_door(coord)
 
+	var previous_type: CellData.TileType = grid.get_cell(coord).tile_type
+	var build_cost: int = get_tile_build_cost(tile_type)
+	if previous_type != tile_type and build_cost > 0:
+		if EconomyManager.gold < build_cost:
+			EventBus.build_blocked.emit(coord, "골드가 부족합니다. (%d골드 필요)" % build_cost)
+			return false
+		EconomyManager.record_expense(build_cost, "build_tile")
+		EventBus.build_cost_spent.emit(coord.view_id, coord.to_world_center(), build_cost)
+
 	grid.set_tile_type(coord, tile_type)
 	var cell: CellData = grid.get_cell(coord)
 	EventBus.grid_cell_changed.emit(coord.view_id, coord, cell)
@@ -102,6 +113,14 @@ func _relocate_inn_door(coord: GridCoord) -> bool:
 
 	var grid: BuildingGrid = get_grid(coord.view_id)
 	var old_door: GridCoord = InnLayoutHelper.find_door_coord(coord.view_id)
+	if old_door.is_in_bounds() and old_door.equals(coord):
+		return true
+
+	var build_cost: int = get_tile_build_cost(CellData.TileType.DOOR)
+	if build_cost > 0 and EconomyManager.gold < build_cost:
+		EventBus.build_blocked.emit(coord, "골드가 부족합니다. (%d골드 필요)" % build_cost)
+		return false
+
 	if old_door.is_in_bounds() and not old_door.equals(coord):
 		grid.set_tile_type(old_door, CellData.TileType.WALL)
 		EventBus.grid_cell_changed.emit(
@@ -111,9 +130,26 @@ func _relocate_inn_door(coord: GridCoord) -> bool:
 		)
 
 	grid.set_tile_type(coord, CellData.TileType.DOOR)
+	if build_cost > 0:
+		EconomyManager.record_expense(build_cost, "build_tile")
+		EventBus.build_cost_spent.emit(coord.view_id, coord.to_world_center(), build_cost)
 	var cell: CellData = grid.get_cell(coord)
 	EventBus.grid_cell_changed.emit(coord.view_id, coord, cell)
 	return true
+
+
+func get_tile_build_cost(tile_type: CellData.TileType) -> int:
+	match tile_type:
+		CellData.TileType.FLOOR:
+			return 2
+		CellData.TileType.WALL:
+			return 2
+		CellData.TileType.DOOR:
+			return 2
+		CellData.TileType.STAIRS_UP, CellData.TileType.STAIRS_DOWN:
+			return 10
+		_:
+			return 0
 
 
 func try_traverse_tile(coord: GridCoord) -> bool:
@@ -150,8 +186,11 @@ func export_save_data() -> Dictionary:
 		"furniture": FurnitureService.export_save_data(),
 		"game_time": GameTimeManager.export_save_data(),
 		"economy": EconomyManager.export_save_data(),
+		"food_storage": FoodStorage.export_save_data(),
+		"market": MarketService.export_save_data(),
 		"reputation": ReputationManager.export_save_data(),
 		"game_clock": GameClock.export_save_data(),
+		"filth": FilthService.export_save_data(),
 	}
 
 
@@ -180,13 +219,25 @@ func import_save_data(data: Dictionary) -> void:
 		FurnitureService.clear_all(false)
 	if version >= 4:
 		if data.has("game_time"):
-			GameTimeManager.import_save_data(data.get("game_time", {}))
+			GameTimeManager.import_save_data(data.get("game_time", {}), version)
 		if data.has("economy"):
 			EconomyManager.import_save_data(data.get("economy", {}))
 		if data.has("reputation"):
 			ReputationManager.import_save_data(data.get("reputation", {}))
 	if version >= 5 and data.has("game_clock"):
 		GameClock.import_save_data(data.get("game_clock", {}))
+	if version >= 7 and data.has("filth"):
+		FilthService.import_save_data(data.get("filth", {}))
+	else:
+		FilthService.reset_all()
+	if data.has("food_storage"):
+		FoodStorage.import_save_data(data.get("food_storage", {}))
+	else:
+		FoodStorage.reset_to_defaults()
+	if data.has("market"):
+		MarketService.import_save_data(data.get("market", {}))
+	else:
+		MarketService.reset_to_defaults()
 
 	GridLayoutSeeder.enforce_locked_cells(_grids)
 
@@ -219,10 +270,9 @@ func load_game() -> bool:
 	if not FurnitureService.has_any_instances():
 		FurnitureLayoutSeeder.seed_defaults()
 	EventBus.grid_loaded.emit()
-	if GameTimeManager.is_briefing():
-		GameTimeManager.call_deferred("request_morning_briefing")
-	elif GameTimeManager.is_running():
-		EventBus.day_started.emit(GameTimeManager.current_day)
+	if GameTimeManager.phase in [GamePhases.Id.OPEN, GamePhases.Id.CLOSING]:
+		CustomerService.call_deferred("_sync_spawn_timer_for_open_hours")
+		StaffService.call_deferred("schedule_work")
 	return true
 
 
@@ -237,15 +287,18 @@ func clear_all_grids() -> void:
 		StaffService.innkeeper.queue_free()
 	StaffService.innkeeper = null
 	EconomyManager.reset_to_defaults()
+	FoodStorage.reset_to_defaults()
+	MarketService.reset_to_defaults()
 	ReputationManager.reset_to_defaults()
+	FilthService.reset_all()
+	GameClock.import_save_data({})
 	GameTimeManager.current_day = 1
-	GameTimeManager.phase = GamePhases.Id.BRIEFING
+	GameTimeManager.phase = GamePhases.Id.PRE_OPEN
 	GameModeManager.set_mode(GameModes.Id.PLAY)
 	DayNightManager.set_period(DayPeriods.Id.DAY)
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 	EventBus.grid_loaded.emit()
-	GameTimeManager.request_morning_briefing()
 
 
 func _reset_grids() -> void:

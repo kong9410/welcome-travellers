@@ -1,6 +1,8 @@
 class_name InnLayoutHelper
 extends RefCounted
 
+const GroupDiningConstants := preload("res://scripts/core/customer/group_dining_constants.gd")
+
 const _CARDINAL_OFFSETS: Array[Vector2i] = [
 	Vector2i(1, 0),
 	Vector2i(-1, 0),
@@ -58,6 +60,24 @@ static func exact_customer_world_point(view_id: ViewIds.Id, world_position: Vect
 	if is_customer_walkable(coord):
 		return coord.to_world_center()
 	return get_closest_customer_walkable_point(view_id, world_position)
+
+
+static func is_customer_target_reachable(
+	view_id: ViewIds.Id,
+	from_world: Vector2,
+	target_world: Vector2
+) -> bool:
+	if from_world == Vector2.ZERO or target_world == Vector2.ZERO:
+		return true
+	var start_position: Vector2 = exact_customer_world_point(view_id, from_world)
+	var target_position: Vector2 = exact_customer_world_point(view_id, target_world)
+	if start_position == Vector2.ZERO or target_position == Vector2.ZERO:
+		return false
+	var start_coord: GridCoord = GridCoord.from_local(view_id, start_position)
+	var target_coord: GridCoord = GridCoord.from_local(view_id, target_position)
+	if start_coord.equals(target_coord):
+		return true
+	return not FloorPathfinder.find_path(view_id, start_position, target_position).is_empty()
 
 
 static func get_closest_customer_walkable_point(view_id: ViewIds.Id, world_position: Vector2) -> Vector2:
@@ -754,10 +774,14 @@ static func find_available_chair(
 			continue
 		if reserved_instance_ids.has(instance.instance_id):
 			continue
+		if FilthService.is_dining_chair_blocked(view_id, instance.instance_id):
+			continue
 		if not _instance_has_adjacent_table(view_id, instance):
 			continue
 		var stand_position: Vector2 = get_furniture_customer_position(instance)
 		if stand_position == Vector2.ZERO:
+			continue
+		if not is_customer_target_reachable(view_id, approach_from, stand_position):
 			continue
 		var score: float = 0.0
 		if approach_from != Vector2.ZERO:
@@ -769,6 +793,251 @@ static func find_available_chair(
 				"position": stand_position,
 			}
 	return best
+
+
+static func find_available_chair_pair_for_table(
+	view_id: ViewIds.Id,
+	reserved_instance_ids: Dictionary = {},
+	approach_from: Vector2 = Vector2.ZERO
+) -> Dictionary:
+	return find_available_chairs_for_table(
+		view_id,
+		GroupDiningConstants.MIN_GROUP_SIZE,
+		reserved_instance_ids,
+		approach_from
+	)
+
+
+static func find_available_chairs_for_table(
+	view_id: ViewIds.Id,
+	chair_count: int,
+	reserved_instance_ids: Dictionary = {},
+	approach_from: Vector2 = Vector2.ZERO
+) -> Dictionary:
+	if chair_count <= 0:
+		return {}
+	if chair_count == 1:
+		var chair: Dictionary = find_available_chair(
+			view_id,
+			reserved_instance_ids,
+			approach_from
+		)
+		if chair.is_empty():
+			return {}
+		var chair_instance: FurnitureInstance = get_instance_by_id(
+			view_id,
+			chair.get("instance_id", "")
+		)
+		if chair_instance == null:
+			return {}
+		var table: FurnitureInstance = _find_adjacent_table_for_instance(view_id, chair_instance)
+		return {
+			"table_instance_id": table.instance_id if table != null else "",
+			"chairs": [chair],
+		}
+	return find_best_table_for_group(
+		view_id,
+		chair_count,
+		reserved_instance_ids,
+		approach_from
+	)
+
+
+static func find_best_table_for_group(
+	view_id: ViewIds.Id,
+	group_size: int,
+	reserved_instance_ids: Dictionary = {},
+	approach_from: Vector2 = Vector2.ZERO
+) -> Dictionary:
+	if group_size <= 0:
+		return {}
+
+	var best: Dictionary = {}
+	var best_score: float = -INF
+
+	for table: FurnitureInstance in FurnitureService.get_instances(view_id):
+		if table.def_id != "table":
+			continue
+
+		var chairs: Array[Dictionary] = _collect_scored_chairs_for_table(
+			view_id,
+			table,
+			reserved_instance_ids,
+			approach_from
+		)
+		if chairs.size() < group_size:
+			continue
+
+		chairs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a.get("score", 0.0)) > float(b.get("score", 0.0))
+		)
+
+		var selected_chairs: Array = []
+		var group_score: float = 0.0
+		for index in range(group_size):
+			var entry: Dictionary = chairs[index]
+			selected_chairs.append(entry)
+			group_score += float(entry.get("score", 0.0))
+
+		if group_score > best_score:
+			best_score = group_score
+			best = {
+				"table_instance_id": table.instance_id,
+				"chairs": selected_chairs,
+			}
+
+	return best
+
+
+static func get_max_group_size_for_table(
+	view_id: ViewIds.Id,
+	table: FurnitureInstance,
+	reserved_instance_ids: Dictionary = {},
+	approach_from: Vector2 = Vector2.ZERO
+) -> int:
+	if table == null or table.def_id != "table":
+		return 0
+	return _collect_scored_chairs_for_table(
+		view_id,
+		table,
+		reserved_instance_ids,
+		approach_from
+	).size()
+
+
+static func find_max_seatable_group_size(
+	view_id: ViewIds.Id,
+	reserved_instance_ids: Dictionary = {},
+	approach_from: Vector2 = Vector2.ZERO
+) -> int:
+	var max_chairs: int = 0
+	for table: FurnitureInstance in FurnitureService.get_instances(view_id):
+		if table.def_id != "table":
+			continue
+		var table_capacity: int = get_max_group_size_for_table(
+			view_id,
+			table,
+			reserved_instance_ids,
+			approach_from
+		)
+		max_chairs = maxi(max_chairs, table_capacity)
+
+	if max_chairs < GroupDiningConstants.MIN_GROUP_SIZE:
+		return 1
+	return mini(max_chairs, GroupDiningConstants.MAX_GROUP_SIZE)
+
+
+static func _collect_scored_chairs_for_table(
+	view_id: ViewIds.Id,
+	table: FurnitureInstance,
+	reserved_instance_ids: Dictionary,
+	approach_from: Vector2
+) -> Array[Dictionary]:
+	var chairs: Array[Dictionary] = []
+	for chair: FurnitureInstance in FurnitureService.get_instances(view_id):
+		if chair.def_id != "chair":
+			continue
+		if reserved_instance_ids.has(chair.instance_id):
+			continue
+		if FilthService.is_dining_chair_blocked(view_id, chair.instance_id):
+			continue
+		if _find_adjacent_table_for_instance(view_id, chair) != table:
+			continue
+
+		var stand_position: Vector2 = get_furniture_customer_position(chair)
+		if stand_position == Vector2.ZERO:
+			continue
+		if not is_customer_target_reachable(view_id, approach_from, stand_position):
+			continue
+
+		var score: float = 0.0
+		if approach_from != Vector2.ZERO:
+			score -= approach_from.distance_to(stand_position)
+		chairs.append({
+			"instance_id": chair.instance_id,
+			"position": stand_position,
+			"score": score,
+		})
+	return chairs
+
+
+static func find_available_waiting_chair(
+	view_id: ViewIds.Id,
+	reserved_instance_ids: Dictionary = {},
+	approach_from: Vector2 = Vector2.ZERO
+) -> Dictionary:
+	var best: Dictionary = {}
+	var best_score: float = -INF
+	for instance: FurnitureInstance in FurnitureService.get_instances(view_id):
+		if instance.def_id != "waiting_chair":
+			continue
+		if reserved_instance_ids.has(instance.instance_id):
+			continue
+		var stand_position: Vector2 = get_furniture_customer_position(instance)
+		if stand_position == Vector2.ZERO:
+			continue
+		if not is_customer_target_reachable(view_id, approach_from, stand_position):
+			continue
+		var score: float = 0.0
+		if approach_from != Vector2.ZERO:
+			score -= approach_from.distance_to(stand_position)
+		if score > best_score:
+			best_score = score
+			best = {
+				"instance_id": instance.instance_id,
+				"position": stand_position,
+			}
+	return best
+
+
+static func count_waiting_chairs(
+	view_id: ViewIds.Id,
+	reserved_instance_ids: Dictionary = {},
+	approach_from: Vector2 = Vector2.ZERO
+) -> Dictionary:
+	var total: int = 0
+	var available: int = 0
+	for instance: FurnitureInstance in FurnitureService.get_instances(view_id):
+		if instance.def_id != "waiting_chair":
+			continue
+		total += 1
+		if reserved_instance_ids.has(instance.instance_id):
+			continue
+		var stand_position: Vector2 = get_furniture_customer_position(instance)
+		if stand_position == Vector2.ZERO:
+			continue
+		if not is_customer_target_reachable(view_id, approach_from, stand_position):
+			continue
+		available += 1
+	return {"total": total, "available": available}
+
+
+static func get_table_group_capacity_entries(
+	view_id: ViewIds.Id,
+	reserved_instance_ids: Dictionary = {},
+	approach_from: Vector2 = Vector2.ZERO
+) -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	var table_index: int = 0
+	for table: FurnitureInstance in FurnitureService.get_instances(view_id):
+		if table.def_id != "table":
+			continue
+		table_index += 1
+		var capacity: int = get_max_group_size_for_table(
+			view_id,
+			table,
+			reserved_instance_ids,
+			approach_from
+		)
+		entries.append({
+			"label": "테이블#%d" % table_index,
+			"capacity": capacity,
+			"instance_id": table.instance_id,
+		})
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("capacity", 0)) > int(b.get("capacity", 0))
+	)
+	return entries
 
 
 static func find_available_bed(
@@ -785,6 +1054,8 @@ static func find_available_bed(
 			continue
 		var stand_position: Vector2 = get_furniture_customer_position(instance)
 		if stand_position == Vector2.ZERO:
+			continue
+		if not is_customer_target_reachable(view_id, approach_from, stand_position):
 			continue
 		var score: float = 0.0
 		if approach_from != Vector2.ZERO:
@@ -805,6 +1076,39 @@ static func get_clean_position(view_id: ViewIds.Id, world_position: Vector2) -> 
 	if snapped != Vector2.ZERO:
 		return snapped
 	return get_closest_floor_world_point(view_id, world_position)
+
+
+static func get_clean_position_for_filth(view_id: ViewIds.Id, filth_coord: GridCoord) -> Vector2:
+	if filth_coord == null or not filth_coord.is_in_bounds():
+		return Vector2.ZERO
+	for offset: Vector2i in _CARDINAL_OFFSETS:
+		var neighbor := GridCoord.new(
+			filth_coord.x + offset.x,
+			filth_coord.y + offset.y,
+			filth_coord.view_id
+		)
+		if not is_floor_walkable(neighbor):
+			continue
+		return neighbor.to_world_center()
+	return get_closest_floor_world_point(view_id, filth_coord.to_world_center())
+
+
+static func get_clean_position_for_chair_filth(
+	view_id: ViewIds.Id,
+	chair_instance_id: String
+) -> Vector2:
+	if chair_instance_id == "":
+		return Vector2.ZERO
+	var food_position: Vector2 = get_table_food_position(view_id, chair_instance_id)
+	if food_position != Vector2.ZERO:
+		var food_coord: GridCoord = GridCoord.from_local(view_id, food_position)
+		var filth_clean_position: Vector2 = get_clean_position_for_filth(view_id, food_coord)
+		if filth_clean_position != Vector2.ZERO:
+			return filth_clean_position
+	var chair: FurnitureInstance = get_instance_by_id(view_id, chair_instance_id)
+	if chair == null:
+		return Vector2.ZERO
+	return get_clean_position(view_id, get_furniture_customer_position(chair))
 
 
 static func is_near_world_position(

@@ -8,6 +8,7 @@ extends Control
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	add_to_group("settings_menu")
 	hide()
 	mouse_filter = Control.MOUSE_FILTER_STOP

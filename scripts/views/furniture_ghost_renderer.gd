@@ -9,6 +9,7 @@ var _hover_instance: FurnitureInstance = null
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	z_index = 2
 	set_process(true)
 	EventBus.game_mode_changed.connect(_on_refresh)

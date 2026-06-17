@@ -2,6 +2,10 @@ class_name TopdownFurnitureDrawer
 extends RefCounted
 
 const EDGE_WIDTH: float = 1.25
+const CHAIR_TEXTURE: Texture2D = preload("res://assets/chair_directions.png")
+const CHAIR_DIRECTION_COLUMNS: int = 4
+const CHAIR_TEXTURE_CONTENT_HEIGHT_RATIO: float = 0.48
+const CHAIR_DRAW_Y_OFFSET: float = 4.0
 
 
 static func draw_furniture(
@@ -23,16 +27,26 @@ static func draw_furniture(
 	var art_size: Vector2 = Vector2(definition.footprint) * scale
 	var center: Vector2 = rect.get_center()
 	var local_rect := Rect2(-art_size * 0.5, art_size)
+	var uses_chair_texture: bool = (
+		def_id in ["chair", "waiting_chair"] and CHAIR_TEXTURE != null
+	)
+	var draw_rotation: float = 0.0 if uses_chair_texture else steps * PI * 0.5
 
-	canvas.draw_set_transform(center, steps * PI * 0.5, Vector2.ONE)
-	_draw_shape(canvas, local_rect, def_id, definition.placeholder_color)
+	canvas.draw_set_transform(center, draw_rotation, Vector2.ONE)
+	_draw_shape(canvas, local_rect, def_id, definition.placeholder_color, steps)
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-static func _draw_shape(canvas: CanvasItem, rect: Rect2, def_id: String, color: Color) -> void:
+static func _draw_shape(
+	canvas: CanvasItem,
+	rect: Rect2,
+	def_id: String,
+	color: Color,
+	rotation_steps: int = 0
+) -> void:
 	match def_id:
-		"chair":
-			_draw_chair(canvas, rect, color)
+		"chair", "waiting_chair":
+			_draw_chair(canvas, rect, color, rotation_steps)
 		"table":
 			_draw_table(canvas, rect, color)
 		"bed":
@@ -67,12 +81,58 @@ static func _draw_table(canvas: CanvasItem, rect: Rect2, color: Color) -> void:
 	_draw_legs(canvas, body, color.darkened(0.30), rect.size.x * 0.07)
 
 
-static func _draw_chair(canvas: CanvasItem, rect: Rect2, color: Color) -> void:
+static func _draw_chair(
+	canvas: CanvasItem,
+	rect: Rect2,
+	color: Color,
+	rotation_steps: int = 0
+) -> void:
+	if CHAIR_TEXTURE != null:
+		var frame_index: int = _chair_texture_frame_index(rotation_steps)
+		var source_rect: Rect2 = _chair_texture_source_rect(frame_index)
+		var aspect: float = source_rect.size.y / maxf(source_rect.size.x, 1.0)
+		var draw_width: float = rect.size.x
+		var draw_height: float = draw_width * aspect
+		if draw_height > rect.size.y:
+			draw_height = rect.size.y
+			draw_width = draw_height / aspect
+		var draw_rect := Rect2(
+			rect.position.x + (rect.size.x - draw_width) * 0.5,
+			rect.end.y - draw_height + CHAIR_DRAW_Y_OFFSET,
+			draw_width,
+			draw_height
+		)
+		canvas.draw_texture_rect_region(CHAIR_TEXTURE, draw_rect, source_rect)
+		return
+
 	var back := _inset(rect, 0.14, 0.06, 0.14, 0.62)
 	var seat := _inset(rect, 0.16, 0.34, 0.16, 0.16)
 	_draw_box(canvas, back, color.darkened(0.05), rect.size.y * 0.18)
 	_draw_box(canvas, seat, color.lightened(0.10), rect.size.y * 0.18)
 	_draw_legs(canvas, seat, color.darkened(0.32), rect.size.x * 0.08)
+
+
+static func _chair_texture_source_rect(frame_index: int) -> Rect2:
+	var tex_size: Vector2 = CHAIR_TEXTURE.get_size()
+	var cell_width: float = tex_size.x / float(CHAIR_DIRECTION_COLUMNS)
+	var content_height: float = tex_size.y * CHAIR_TEXTURE_CONTENT_HEIGHT_RATIO
+	return Rect2(
+		Vector2(float(frame_index) * cell_width, 0.0),
+		Vector2(cell_width, content_height)
+	)
+
+
+static func _chair_texture_frame_index(rotation_steps: int) -> int:
+	# Sheet order: N, S, W, E — matches rotation_steps back direction.
+	match posmod(rotation_steps, 4):
+		0:
+			return 0
+		1:
+			return 2
+		2:
+			return 1
+		_:
+			return 3
 
 
 static func _draw_bed(canvas: CanvasItem, rect: Rect2, color: Color) -> void:

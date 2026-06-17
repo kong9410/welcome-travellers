@@ -13,8 +13,18 @@ const LABELS: Dictionary = {
 	Id.FOOD_AND_LODGING: "Lodging & Food",
 }
 
+const CUSTOMER_LABELS: Dictionary = {
+	Id.FOOD: "식사 손님",
+	Id.LODGING: "숙박 손님",
+	Id.FOOD_AND_LODGING: "숙박+식사 손님",
+}
+
 static func label_for(order_type: Id) -> String:
 	return LABELS.get(order_type, "Unknown")
+
+
+static func customer_label_for(order_type: Id) -> String:
+	return CUSTOMER_LABELS.get(order_type, "손님")
 
 
 static func color_for(order_type: Id) -> Color:
